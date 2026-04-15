@@ -187,7 +187,6 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				OTHER_LDFLAGS = "-framework Carbon";
 				PRODUCT_BUNDLE_IDENTIFIER = com.wisperbar.app;
 				SDKROOT = macosx;
 				SWIFT_STRICT_CONCURRENCY = minimal;
@@ -329,7 +328,6 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				OTHER_LDFLAGS = "-framework Carbon";
 				PRODUCT_BUNDLE_IDENTIFIER = com.wisperbar.app;
 				SDKROOT = macosx;
 				SWIFT_STRICT_CONCURRENCY = minimal;
