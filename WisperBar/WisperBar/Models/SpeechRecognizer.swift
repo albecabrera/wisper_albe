@@ -169,6 +169,10 @@ final class SpeechRecognizer: NSObject, ObservableObject {
             guard let self else { return }
 
             DispatchQueue.main.async {
+                // Callback ignorieren wenn Session bereits absichtlich beendet wurde
+                // (z.B. durch stopRecording → endSession → recognitionTask.cancel())
+                guard self.recognitionRequest != nil else { return }
+
                 if let result {
                     if result.isFinal {
                         let text = result.bestTranscription.formattedString
@@ -182,10 +186,15 @@ final class SpeechRecognizer: NSObject, ObservableObject {
                 }
 
                 if let error = error as NSError? {
-                    // Stille Pausen (kein echter Fehler) ignorieren
-                    let isSilence = error.domain == "kAFAssistantErrorDomain" &&
-                                    [1110, 1107, 1101].contains(error.code)
-                    if !isSilence {
+                    // Stille Pausen und Abbrüche ignorieren
+                    let ignoredCodes: Set<Int> = [
+                        1110, 1107, 1101,  // kAFAssistantErrorDomain: no speech / silence
+                        203, 209,          // Cancellation-Codes
+                        -999,              // NSURLErrorCancelled
+                    ]
+                    let isBenign = ignoredCodes.contains(error.code) ||
+                                   error.localizedDescription.lowercased().contains("cancel")
+                    if !isBenign {
                         self.recordingState = .error("Spracherkennungsfehler: \(error.localizedDescription)")
                         self.endSession()
                     }
