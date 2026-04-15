@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Xcode / Build
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+WisperBar/.build/
+*.o
+*.d
+*.dia
+*.swiftdeps
+*.swiftconstvalues
+DerivedData/
+build/
+
+# Bilder (lokal, nicht für Repo)
+bild1.jpeg
+bild2.jpeg
+bild3.jpeg

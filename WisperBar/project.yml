@@ -1,0 +1,54 @@
+name: WisperBar
+options:
+  bundleIdPrefix: com.wisperbar
+  deploymentTarget:
+    macOS: "13.0"
+  xcodeVersion: "15"
+  createIntermediateGroups: true
+
+targets:
+  WisperBar:
+    type: application
+    platform: macOS
+    sources:
+      - path: WisperBar
+        excludes:
+          - "Resources/Info.plist"
+          - "Resources/WisperBar.entitlements"
+    resources:
+      - path: WisperBar/Resources
+        excludes:
+          - "WisperBar.entitlements"
+    info:
+      path: WisperBar/Resources/Info.plist
+      properties:
+        CFBundleName: WisperBar
+        CFBundleDisplayName: WisperBar
+        CFBundleIdentifier: com.wisperbar.app
+        CFBundleVersion: "1"
+        CFBundleShortVersionString: "1.0"
+        LSUIElement: true
+        NSMicrophoneUsageDescription: "WisperBar benötigt Mikrofonzugriff für die lokale Spracherkennung."
+        NSSpeechRecognitionUsageDescription: "WisperBar nutzt lokale Spracherkennung für das Diktat. Keine Daten verlassen das Gerät."
+        NSAppleEventsUsageDescription: "Zum Einfügen von Text in andere Apps."
+    entitlements:
+      path: WisperBar/Resources/WisperBar.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.wisperbar.app
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        OTHER_LDFLAGS: "-framework Carbon"
+        SWIFT_STRICT_CONCURRENCY: minimal
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_STYLE: Automatic
+      configs:
+        Debug:
+          DEBUG_INFORMATION_FORMAT: dwarf
+          CODE_SIGN_IDENTITY: "-"
+          CODE_SIGNING_REQUIRED: NO
+          CODE_SIGNING_ALLOWED: NO
+        Release:
+          DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+          ENABLE_HARDENED_RUNTIME: YES
+          CODE_SIGN_STYLE: Automatic

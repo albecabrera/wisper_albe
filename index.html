@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WisperBar – Sprache zu Text</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <nav>
+    <div class="nav-logo">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <rect x="2" y="6" width="3" height="8" rx="1.5" fill="#2ecc71"/>
+        <rect x="7" y="2" width="3" height="16" rx="1.5" fill="#2ecc71"/>
+        <rect x="12" y="5" width="3" height="10" rx="1.5" fill="#2ecc71"/>
+        <rect x="17" y="7" width="3" height="6" rx="1.5" fill="#2ecc71"/>
+      </svg>
+      WisperBar
+    </div>
+    <div class="nav-links">
+      <a href="#how">So funktioniert es</a>
+      <a href="#features">Features</a>
+      <a href="#privacy">Privatsphäre</a>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <p class="badge">Für den Browser</p>
+    <h1>Sprache zu Text.<br /><span class="accent">Privat. Sofort.</span></h1>
+    <p class="hero-sub">
+      Transkribiert deine Stimme – direkt im Browser.<br />
+      Keine Cloud. Keine Daten verlassen je dein Gerät.
+    </p>
+    <button class="btn-primary" id="startBtn">
+      <svg width="16" height="16" viewBox="0 0 22 22" fill="currentColor">
+        <path d="M11 2a4 4 0 0 1 4 4v5a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/>
+        <path d="M4.5 11a6.5 6.5 0 0 0 13 0h1.5a8 8 0 0 1-16 0H4.5z"/>
+      </svg>
+      Aufnahme starten
+    </button>
+    <p class="hint">Oder drücke <kbd>Leertaste</kbd></p>
+  </section>
+
+  <section class="how" id="how">
+    <h2>So funktioniert es</h2>
+    <p class="section-sub">Von Aufnahme zu Text in Sekunden.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-icon">
+          <kbd class="key">⎵</kbd>
+        </div>
+        <h3>1. Shortcut drücken</h3>
+        <p>Drücke die Leertaste oder klicke den Button, um die Aufnahme zu starten.</p>
+      </div>
+      <div class="step">
+        <div class="step-icon waveform-icon" id="demoWave">
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <h3>2. Sprechen</h3>
+        <p>WisperBar nimmt auf und zeigt dir als Feedback eine Live-Wellenform.</p>
+      </div>
+      <div class="step">
+        <div class="step-icon text-icon">
+          <div class="text-lines">
+            <span></span><span></span><span class="short"></span>
+          </div>
+          <div class="cursor-blink"></div>
+        </div>
+        <h3>3. Text erscheint</h3>
+        <p>Der transkribierte Text wird automatisch ins Textfeld eingefügt.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="app-section" id="app">
+    <div class="recorder-card">
+      <div class="recorder-top">
+        <div class="waveform-container" id="waveformContainer">
+          <div class="waveform-idle" id="waveformIdle">
+            <svg width="200" height="60" viewBox="0 0 200 60">
+              <rect x="5"   y="22" width="8" height="16" rx="4" fill="#2ecc71" opacity="0.4"/>
+              <rect x="20"  y="15" width="8" height="30" rx="4" fill="#2ecc71" opacity="0.6"/>
+              <rect x="35"  y="5"  width="8" height="50" rx="4" fill="#2ecc71"/>
+              <rect x="50"  y="12" width="8" height="36" rx="4" fill="#2ecc71" opacity="0.7"/>
+              <rect x="65"  y="18" width="8" height="24" rx="4" fill="#2ecc71" opacity="0.5"/>
+              <rect x="80"  y="8"  width="8" height="44" rx="4" fill="#2ecc71" opacity="0.8"/>
+              <rect x="95"  y="15" width="8" height="30" rx="4" fill="#2ecc71" opacity="0.6"/>
+              <rect x="110" y="20" width="8" height="20" rx="4" fill="#2ecc71" opacity="0.5"/>
+              <rect x="125" y="10" width="8" height="40" rx="4" fill="#2ecc71" opacity="0.75"/>
+              <rect x="140" y="18" width="8" height="24" rx="4" fill="#2ecc71" opacity="0.5"/>
+              <rect x="155" y="14" width="8" height="32" rx="4" fill="#2ecc71" opacity="0.6"/>
+              <rect x="170" y="22" width="8" height="16" rx="4" fill="#2ecc71" opacity="0.4"/>
+              <rect x="185" y="25" width="8" height="10" rx="4" fill="#2ecc71" opacity="0.3"/>
+            </svg>
+          </div>
+          <canvas id="waveCanvas" width="400" height="80" style="display:none;"></canvas>
+        </div>
+        <div class="status-row">
+          <div class="status-dot" id="statusDot"></div>
+          <span id="statusText">Bereit</span>
+          <span class="timer" id="timer">00:00</span>
+        </div>
+      </div>
+
+      <div class="recorder-actions">
+        <button class="rec-btn" id="recBtn" title="Aufnahme starten (Leertaste)">
+          <svg id="recIcon" width="22" height="22" viewBox="0 0 22 22" fill="currentColor">
+            <path d="M11 2a4 4 0 0 1 4 4v5a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/>
+            <path d="M4.5 11a6.5 6.5 0 0 0 13 0h1.5a8 8 0 0 1-16 0H4.5z"/>
+          </svg>
+        </button>
+        <button class="clear-btn" id="clearBtn">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M5.5 1a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1h-5zM2 3.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1H13v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4H2.5a.5.5 0 0 1-.5-.5z"/>
+          </svg>
+          Leeren
+        </button>
+        <button class="copy-btn" id="copyBtn">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+            <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+          </svg>
+          Kopieren
+        </button>
+      </div>
+
+      <div class="transcript-box">
+        <div class="transcript-label">Transkription</div>
+        <div class="interim-text" id="interimText"></div>
+        <textarea
+          id="transcriptArea"
+          placeholder="Dein transkribierter Text erscheint hier…&#10;&#10;Drücke die Leertaste oder klicke den Mikrofon-Button um zu starten."
+          spellcheck="true"
+        ></textarea>
+      </div>
+
+      <div class="options-row">
+        <label class="toggle-label">
+          <input type="checkbox" id="cleanupToggle" checked />
+          <span class="toggle-switch"></span>
+          Füllwörter entfernen
+        </label>
+        <label class="toggle-label">
+          <input type="checkbox" id="autoStopToggle" />
+          <span class="toggle-switch"></span>
+          Auto-Stop nach Pause
+        </label>
+        <select id="langSelect" class="lang-select">
+          <option value="de-DE">Deutsch</option>
+          <option value="en-US">English (US)</option>
+          <option value="en-GB">English (UK)</option>
+          <option value="es-ES">Español</option>
+          <option value="fr-FR">Français</option>
+        </select>
+      </div>
+    </div>
+  </section>
+
+  <section class="features" id="features">
+    <h2>Saubere Transkripte</h2>
+    <p class="section-sub">WisperBar bereinigt deinen Text automatisch.</p>
+    <div class="feature-list">
+      <div class="feature-item">
+        <div class="feature-check">✓</div>
+        <div>
+          <strong>Erkennt Selbstkorrekturen</strong>
+          <p>"ne, ich meine um 8 Uhr" → "8 Uhr"</p>
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-check">✓</div>
+        <div>
+          <strong>Entfernt Füllwörter</strong>
+          <p>"äh", "öhm", "uh", "um" – ohne deinen Stil zu verändern</p>
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-check">✓</div>
+        <div>
+          <strong>Mehrsprachig</strong>
+          <p>Deutsch und Englisch out of the box – weitere Sprachen verfügbar</p>
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-check">✓</div>
+        <div>
+          <strong>100% lokal</strong>
+          <p>Kein API Key, keine Gebühren, kein Tracking</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="example-card">
+      <div class="example-col">
+        <div class="example-label">Du sagst</div>
+        <p class="example-text">"Äh, ich wollte, also ich meine, ich möchte das Meeting auf, ne, lass uns sagen 9 Uhr machen."</p>
+      </div>
+      <div class="example-arrow">→</div>
+      <div class="example-col">
+        <div class="example-label highlight">WisperBar schreibt</div>
+        <p class="example-text clean">"Ich möchte das Meeting auf 9 Uhr machen."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="privacy" id="privacy">
+    <h2>Deine Stimme bleibt <span class="accent">privat</span></h2>
+    <p class="section-sub">WisperBar wurde auf Grund von maximaler Privatsphäre gebaut.</p>
+    <div class="privacy-grid">
+      <div class="privacy-card">
+        <div class="privacy-icon">☁️</div>
+        <h3>Keine Cloud</h3>
+        <p>Deine Audioaufnahmen werden nie hochgeladen. Alles bleibt in deinem Browser.</p>
+      </div>
+      <div class="privacy-card">
+        <div class="privacy-icon">📊</div>
+        <h3>Kein Tracking</h3>
+        <p>Keine Telemetrie, keine Analytics, keine Accounts. Du bleibst anonym.</p>
+      </div>
+      <div class="privacy-card">
+        <div class="privacy-icon">🔑</div>
+        <h3>Keine API-Keys</h3>
+        <p>Alles läuft über die Browser-eigene Web Speech API – keine externen Dienste.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="footer-logo">
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+        <rect x="2" y="6" width="3" height="8" rx="1.5" fill="#2ecc71"/>
+        <rect x="7" y="2" width="3" height="16" rx="1.5" fill="#2ecc71"/>
+        <rect x="12" y="5" width="3" height="10" rx="1.5" fill="#2ecc71"/>
+        <rect x="17" y="7" width="3" height="6" rx="1.5" fill="#2ecc71"/>
+      </svg>
+      WisperBar
+    </div>
+    <p>Komplett lokal. Kein Abo. Keine Daten.</p>
+  </footer>
+
+  <div class="toast" id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>
