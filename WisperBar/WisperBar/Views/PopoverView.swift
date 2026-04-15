@@ -96,7 +96,7 @@ struct PopoverView: View {
                 if sr.recordingState.isRecording {
                     RecordingTimerView()
                 } else {
-                    Text("⌘⇧D")
+                    Text("fn ⇧")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Color(.tertiaryLabelColor))
                         .padding(.horizontal, 5)
@@ -268,7 +268,7 @@ struct PopoverView: View {
         switch sr.recordingState {
         case .idle:
             return sr.transcript.isEmpty
-                ? "Bereit – Shortcut oder Button drücken"
+                ? "Bereit – fn+Shift oder Button drücken"
                 : "Fertig – \(sr.selectedLanguage.flag) \(sr.selectedLanguage.displayName)"
         case .requestingPermission:
             return "Berechtigungen werden angefordert…"

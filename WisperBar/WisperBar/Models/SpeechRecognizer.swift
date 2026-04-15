@@ -65,6 +65,9 @@ final class SpeechRecognizer: NSObject, ObservableObject {
     private let audioEngine = AVAudioEngine()
     private let barCount = 32
 
+    /// Flag: Session wurde absichtlich beendet → Callbacks ignorieren
+    private var isSessionActive = false
+
     // MARK: – Init
 
     override init() {
@@ -102,10 +105,30 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         }
     }
 
+    /// Aufnahme stoppen, Text in Zwischenablage sichern und automatisch einfügen.
     func stopRecording() {
         guard recordingState.isRecording else { return }
+
+        // Vorläufigen Text sichern BEVOR endSession() den Callback blockiert
+        if !interimTranscript.isEmpty {
+            let text = interimTranscript.trimmingCharacters(in: .whitespaces)
+            if !text.isEmpty {
+                transcript += (transcript.isEmpty ? "" : " ") + text
+            }
+            interimTranscript = ""
+        }
+
         endSession()
         recordingState = .idle
+
+        // Text automatisch in Zwischenablage und in aktives Textfeld einfügen
+        if !transcript.isEmpty {
+            copyToClipboard()
+            NotificationCenter.default.post(name: .wbClosePopover, object: nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                self.simulatePaste()
+            }
+        }
     }
 
     func clearTranscript() {
@@ -164,14 +187,14 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         }
 
         recognitionRequest = request
+        isSessionActive = true
 
         recognitionTask = sfRecognizer?.recognitionTask(with: request) { [weak self] result, error in
             guard let self else { return }
 
             DispatchQueue.main.async {
-                // Callback ignorieren wenn Session bereits absichtlich beendet wurde
-                // (z.B. durch stopRecording → endSession → recognitionTask.cancel())
-                guard self.recognitionRequest != nil else { return }
+                // Callback ignorieren wenn Session absichtlich beendet (Cancel-Fehler vermeiden)
+                guard self.isSessionActive else { return }
 
                 if let result {
                     if result.isFinal {
@@ -224,6 +247,9 @@ final class SpeechRecognizer: NSObject, ObservableObject {
     }
 
     private func endSession() {
+        // Flag zuerst setzen – verhindert dass spätere Callbacks feuern
+        isSessionActive = false
+
         audioEngine.stop()
         if audioEngine.inputNode.numberOfInputs > 0 {
             audioEngine.inputNode.removeTap(onBus: 0)

@@ -1,96 +1,73 @@
 // HotKeyManager.swift
-// Registriert einen systemweiten Keyboard-Shortcut via Carbon-Framework.
-// Carbon-Hotkeys funktionieren ohne Accessibility-Berechtigung.
-import Carbon
+// Erkennt den globalen Shortcut fn+Shift via NSEvent.flagsChanged.
+// Kein Carbon nötig – kein separater API-Key oder Accessibility-Berechtigung
+// für reine Modifier-Kombinationen.
 import AppKit
 
 final class HotKeyManager {
 
-    // MARK: – Konfiguration
+    // MARK: – Eigenschaften
 
-    /// Standard-Shortcut: ⌘⇧D
-    /// Kann durch Anpassen von `keyCode` und `modifiers` geändert werden.
-    private let keyCode:   UInt32 = UInt32(kVK_ANSI_D)
-    private let modifiers: UInt32 = UInt32(cmdKey | shiftKey)
+    private var globalMonitor: Any?
+    private var localMonitor: Any?
 
-    // MARK: – Private Eigenschaften
+    /// Zuletzt gesehener Modifier-Zustand (für Edge-Detection: "gerade gedrückt")
+    private var previousFlags: NSEvent.ModifierFlags = []
 
-    private var hotKeyRef:      EventHotKeyRef?
-    private var eventHandlerRef: EventHandlerRef?
-
-    /// Statische Referenz auf die Callback-Closure, da C-Funktionszeiger keinen
-    /// Swift-Kontext einschließen können.
-    nonisolated(unsafe) static var onHotKeyPressed: (() -> Void)?
+    // Statisch, damit Callback aus dem Monitor-Block erreichbar ist
+    nonisolated(unsafe) static var onActivate: (() -> Void)?
 
     // MARK: – Öffentliche API
 
-    /// Shortcut registrieren und Callback hinterlegen.
+    /// fn+Shift-Monitor registrieren.
     func register(callback: @escaping () -> Void) {
-        HotKeyManager.onHotKeyPressed = callback
-        installEventHandler()
-        registerHotKey()
+        HotKeyManager.onActivate = callback
+        installMonitors()
     }
 
-    // MARK: – Carbon-Integration
+    // MARK: – Monitor-Setup
 
-    private func installEventHandler() {
-        var eventSpec = EventTypeSpec(
-            eventClass: OSType(kEventClassKeyboard),
-            eventKind:  OSType(kEventHotKeyPressed)
-        )
-
-        // C-kompatibler Handler ohne Swift-Kontext-Capture
-        let handler: EventHandlerUPP = { _, _, _ -> OSStatus in
-            HotKeyManager.onHotKeyPressed?()
-            return noErr
+    private func installMonitors() {
+        let handler: (NSEvent) -> Void = { [weak self] event in
+            self?.handleFlagsChanged(event)
         }
 
-        let status = InstallEventHandler(
-            GetApplicationEventTarget(),
-            handler,
-            1,
-            &eventSpec,
-            nil,
-            &eventHandlerRef
-        )
+        // Global: greift wenn eine andere App im Vordergrund ist
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { event in
+            handler(event)
+        }
 
-        if status != noErr {
-            print("[WisperBar] HotKey-EventHandler konnte nicht installiert werden: \(status)")
+        // Lokal: greift wenn der Popover fokussiert ist
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+            handler(event)
+            return event
         }
     }
 
-    private func registerHotKey() {
-        // Eindeutige ID für diesen Hotkey ("WBRK" als 4-char-code)
-        var hotKeyID = EventHotKeyID()
-        hotKeyID.signature = fourCharCode("WBRK")
-        hotKeyID.id = 1
+    /// Wertet aus ob fn+Shift soeben aktiviert wurde (rising edge).
+    private func handleFlagsChanged(_ event: NSEvent) {
+        // Nur die für uns relevanten Modifier betrachten
+        let relevant: NSEvent.ModifierFlags = [.function, .shift, .command, .option, .control]
+        let current = event.modifierFlags.intersection(relevant)
 
-        let status = RegisterEventHotKey(
-            keyCode,
-            modifiers,
-            hotKeyID,
-            GetApplicationEventTarget(),
-            OptionBits(0),
-            &hotKeyRef
-        )
+        // fn+Shift = genau .function und .shift, keine anderen Modifier
+        let target: NSEvent.ModifierFlags = [.function, .shift]
+        let isActive   = current == target
+        let wasActive  = previousFlags == target
 
-        if status != noErr {
-            print("[WisperBar] Hotkey konnte nicht registriert werden: \(status)")
-        } else {
-            print("[WisperBar] Hotkey ⌘⇧D erfolgreich registriert.")
+        // Rising-Edge: fn+Shift gerade aktiviert (nicht schon vorher gehalten)
+        if isActive && !wasActive {
+            HotKeyManager.onActivate?()
         }
-    }
 
-    /// Konvertiert einen 4-Zeichen-String in einen OSType (FourCharCode)
-    private func fourCharCode(_ s: String) -> OSType {
-        s.utf8.prefix(4).reduce(0) { ($0 << 8) | OSType($1) }
+        previousFlags = current
     }
 
     // MARK: – Aufräumen
 
     deinit {
-        if let ref = hotKeyRef      { UnregisterEventHotKey(ref) }
-        if let ref = eventHandlerRef { RemoveEventHandler(ref) }
-        HotKeyManager.onHotKeyPressed = nil
+        if let m = globalMonitor { NSEvent.removeMonitor(m) }
+        if let m = localMonitor  { NSEvent.removeMonitor(m) }
+        HotKeyManager.onActivate = nil
     }
 }

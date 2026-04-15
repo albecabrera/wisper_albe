@@ -38,7 +38,6 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.wisperbar.app
         SWIFT_VERSION: "5.9"
         MACOSX_DEPLOYMENT_TARGET: "13.0"
-        OTHER_LDFLAGS: "-framework Carbon"
         SWIFT_STRICT_CONCURRENCY: minimal
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_STYLE: Automatic
