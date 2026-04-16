@@ -174,7 +174,7 @@ final class SpeechRecognizer: NSObject, ObservableObject {
     // MARK: – Aufnahmesitzung
 
     private func beginSession() {
-        endSession()
+        tearDownAudioStack()
 
         let inputNode = audioEngine.inputNode
         let format    = inputNode.outputFormat(forBus: 0)
@@ -182,8 +182,10 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
 
-        if #available(macOS 13, *), sfRecognizer?.supportsOnDeviceRecognition == true {
-            request.requiresOnDeviceRecognition = true
+        if #available(macOS 13, *) {
+            // On-Device bevorzugen: läuft komplett lokal, kein Internet, keine Kosten.
+            // Falls die Sprache kein lokales Modell hat, fällt Apple automatisch zurück.
+            request.requiresOnDeviceRecognition = sfRecognizer?.supportsOnDeviceRecognition == true
         }
 
         recognitionRequest = request
@@ -193,31 +195,41 @@ final class SpeechRecognizer: NSObject, ObservableObject {
             guard let self else { return }
 
             DispatchQueue.main.async {
-                // Callback ignorieren wenn Session absichtlich beendet (Cancel-Fehler vermeiden)
                 guard self.isSessionActive else { return }
 
+                // ── Ergebnisse verarbeiten ────────────────────────────────────
                 if let result {
+                    let text = result.bestTranscription.formattedString
                     if result.isFinal {
-                        let text = result.bestTranscription.formattedString
                         if !text.trimmingCharacters(in: .whitespaces).isEmpty {
                             self.transcript += (self.transcript.isEmpty ? "" : " ") + text
                         }
                         self.interimTranscript = ""
+                        // Apple beendet die Task nach jedem finalen Ergebnis (≈60 s Limit).
+                        // Solange der Nutzer noch aufnimmt, direkt neu starten.
+                        self.restartSession()
+                        return
                     } else {
-                        self.interimTranscript = result.bestTranscription.formattedString
+                        self.interimTranscript = text
                     }
                 }
 
+                // ── Fehlerbehandlung ──────────────────────────────────────────
                 if let error = error as NSError? {
-                    // Stille Pausen und Abbrüche ignorieren
-                    let ignoredCodes: Set<Int> = [
-                        1110, 1107, 1101,  // kAFAssistantErrorDomain: no speech / silence
-                        203, 209,          // Cancellation-Codes
-                        -999,              // NSURLErrorCancelled
-                    ]
-                    let isBenign = ignoredCodes.contains(error.code) ||
+                    // Alle kAFAssistantErrorDomain-Fehler kommen vom Apple-Server –
+                    // für lokale Nutzung irrelevant; Session einfach neu starten.
+                    if error.domain == "kAFAssistantErrorDomain" {
+                        self.restartSession()
+                        return
+                    }
+
+                    // Sonstige harmlose System-Codes (Stille, Abbruch, URL-Cancel)
+                    let benignCodes: Set<Int> = [203, 209, -999]
+                    let isBenign = benignCodes.contains(error.code) ||
                                    error.localizedDescription.lowercased().contains("cancel")
-                    if !isBenign {
+                    if isBenign {
+                        self.restartSession()
+                    } else {
                         self.recordingState = .error("Spracherkennungsfehler: \(error.localizedDescription)")
                         self.endSession()
                     }
@@ -246,10 +258,35 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         }
     }
 
+    /// Startet nur die Erkennungs-Task neu, ohne den Aufnahmezustand zu ändern.
+    /// Wird nach Apple-Timeouts, Server-Fehlern und finalen Ergebnissen aufgerufen.
+    private func restartSession() {
+        guard isSessionActive else { return }
+        audioEngine.stop()
+        audioEngine.inputNode.removeTap(onBus: 0)
+        recognitionRequest?.endAudio()
+        recognitionTask?.cancel()
+        recognitionRequest = nil
+        recognitionTask   = nil
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            guard let self, self.isSessionActive else { return }
+            self.beginSession()
+        }
+    }
+
     private func endSession() {
         // Flag zuerst setzen – verhindert dass spätere Callbacks feuern
         isSessionActive = false
+        tearDownAudioStack()
 
+        DispatchQueue.main.async {
+            self.audioLevels = Array(repeating: 0, count: self.barCount)
+            self.interimTranscript = ""
+        }
+    }
+
+    private func tearDownAudioStack() {
         audioEngine.stop()
         if audioEngine.inputNode.numberOfInputs > 0 {
             audioEngine.inputNode.removeTap(onBus: 0)
@@ -258,11 +295,6 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         recognitionTask?.cancel()
         recognitionRequest = nil
         recognitionTask   = nil
-
-        DispatchQueue.main.async {
-            self.audioLevels = Array(repeating: 0, count: self.barCount)
-            self.interimTranscript = ""
-        }
     }
 
     // MARK: – Audio-Visualisierung (RMS pro Balken)
@@ -315,11 +347,11 @@ extension SpeechRecognizer: SFSpeechRecognizerDelegate {
         _ speechRecognizer: SFSpeechRecognizer,
         availabilityDidChange available: Bool
     ) {
-        if !available && recordingState.isRecording {
-            DispatchQueue.main.async {
-                self.recordingState = .error("Spracherkennung momentan nicht verfügbar.")
-                self.endSession()
-            }
+        guard !available, recordingState.isRecording else { return }
+        // Erkennung kurz nicht verfügbar (z. B. Netz-Interruption) → neu starten statt Fehler
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self, self.isSessionActive else { return }
+            self.restartSession()
         }
     }
 }
