@@ -1,0 +1,6 @@
+faster-whisper
+sounddevice
+numpy
+pyperclip
+pynput
+rumps
