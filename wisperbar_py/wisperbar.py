@@ -26,7 +26,7 @@ LANGUAGES   = [
 class WisperBar(rumps.App):
 
     def __init__(self):
-        super().__init__("🎤", quit_button=None)
+        super().__init__("🟢 🎙", quit_button=None)
 
         self.recording  = False
         self.frames     = []
@@ -60,9 +60,10 @@ class WisperBar(rumps.App):
         # Sprachen direkt im Menü (kein Untermenü)
         self.lang_items = []
         for flag, name, code in LANGUAGES:
-            item = rumps.MenuItem(f"{flag}  {name}", callback=self._set_lang)
-            item._lang_code = code
-            item.state = (code == self.lang_code)
+            item = rumps.MenuItem(self._lang_title(flag, name, code == self.lang_code), callback=self._set_lang)
+            item._lang_code  = code
+            item._lang_flag  = flag
+            item._lang_name  = name
             self.lang_items.append(item)
 
         self.menu = [
@@ -139,7 +140,7 @@ class WisperBar(rumps.App):
 
     def _transcribe(self):
         if not self.frames:
-            self.title = "🎤"
+            self.title = "🟢 🎙"
             self.lbl_status.title = "✅  Bereit  –  fn + Shift"
             return
 
@@ -191,10 +192,16 @@ class WisperBar(rumps.App):
 
     # ── Sprache ───────────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _lang_title(flag, name, active):
+        if active:
+            return f"▶ {flag}  {name} ◀"
+        return f"   {flag}  {name}"
+
     def _set_lang(self, sender):
         self.lang_code = sender._lang_code
         for item in self.lang_items:
-            item.state = (item._lang_code == self.lang_code)
+            item.title = self._lang_title(item._lang_flag, item._lang_name, item._lang_code == self.lang_code)
 
     # ── fn + Shift Erkennung ──────────────────────────────────────────────────
 
