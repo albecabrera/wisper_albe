@@ -124,10 +124,7 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         // Text automatisch in Zwischenablage und in aktives Textfeld einfügen
         if !transcript.isEmpty {
             copyToClipboard()
-            NotificationCenter.default.post(name: .wbClosePopover, object: nil)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                self.simulatePaste()
-            }
+            simulatePaste()
         }
     }
 
@@ -146,10 +143,7 @@ final class SpeechRecognizer: NSObject, ObservableObject {
     func insertAtCursor() {
         guard !transcript.isEmpty else { return }
         copyToClipboard()
-        NotificationCenter.default.post(name: .wbClosePopover, object: nil)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            self.simulatePaste()
-        }
+        simulatePaste()
     }
 
     // MARK: – Sprachmodell neu aufbauen
