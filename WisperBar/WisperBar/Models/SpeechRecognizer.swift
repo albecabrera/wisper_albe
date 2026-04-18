@@ -111,7 +111,7 @@ final class SpeechRecognizer: NSObject, ObservableObject {
 
         // Vorläufigen Text sichern BEVOR endSession() den Callback blockiert
         if !interimTranscript.isEmpty {
-            let text = interimTranscript.trimmingCharacters(in: .whitespaces)
+            let text = normalizeText(interimTranscript.trimmingCharacters(in: .whitespaces))
             if !text.isEmpty {
                 transcript += (transcript.isEmpty ? "" : " ") + text
             }
@@ -199,9 +199,10 @@ final class SpeechRecognizer: NSObject, ObservableObject {
 
                 // ── Ergebnisse verarbeiten ────────────────────────────────────
                 if let result {
-                    let text = result.bestTranscription.formattedString
+                    let rawText = result.bestTranscription.formattedString
+                    let text = self.normalizeText(rawText)
                     if result.isFinal {
-                        if !text.trimmingCharacters(in: .whitespaces).isEmpty {
+                        if !text.isEmpty {
                             self.transcript += (self.transcript.isEmpty ? "" : " ") + text
                         }
                         self.interimTranscript = ""
@@ -317,6 +318,35 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         }
 
         DispatchQueue.main.async { self.audioLevels = levels }
+    }
+
+    // MARK: – Textnormalisierung
+
+    private func normalizeText(_ input: String) -> String {
+        var text = input
+        // "coma" / "Komma" → ","  |  "punto" / "Punkt" → "."
+        let replacements: [(pattern: String, replacement: String)] = [
+            (#"\s*\b[Kk]omma\b\s*"#,  ","),
+            (#"\s*\bcoma\b\s*"#,       ","),
+            (#"\s*\b[Pp]unkt\b\s*"#,  "."),
+            (#"\s*\bpunto\b\s*"#,      "."),
+        ]
+        for (pattern, replacement) in replacements {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+                let range = NSRange(text.startIndex..., in: text)
+                text = regex.stringByReplacingMatches(in: text, range: range, withTemplate: replacement)
+            }
+        }
+        // Leerzeichen vor Satzzeichen entfernen, doppelte Satzzeichen reduzieren
+        text = text.replacingOccurrences(of: " ,", with: ",")
+        text = text.replacingOccurrences(of: " .", with: ".")
+        if let regex = try? NSRegularExpression(pattern: #",+"#, options: []) {
+            text = regex.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: ",")
+        }
+        if let regex = try? NSRegularExpression(pattern: #"\.+"#, options: []) {
+            text = regex.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: ".")
+        }
+        return text.trimmingCharacters(in: .whitespaces)
     }
 
     // MARK: – Cmd+V simulieren
