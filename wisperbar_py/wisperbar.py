@@ -13,6 +13,7 @@ import pyperclip
 import rumps
 from faster_whisper import WhisperModel
 from pynput import keyboard as kb
+from AppKit import NSAttributedString, NSForegroundColorAttributeName, NSColor
 
 SAMPLE_RATE = 16_000
 MODEL_SIZE  = "base"
@@ -26,7 +27,7 @@ LANGUAGES   = [
 class WisperBar(rumps.App):
 
     def __init__(self):
-        super().__init__("🟢 🎙", quit_button=None)
+        super().__init__("🔴 🎙", quit_button=None)
 
         self.recording  = False
         self.frames     = []
@@ -60,10 +61,10 @@ class WisperBar(rumps.App):
         # Sprachen direkt im Menü (kein Untermenü)
         self.lang_items = []
         for flag, name, code in LANGUAGES:
-            item = rumps.MenuItem(self._lang_title(flag, name, code == self.lang_code), callback=self._set_lang)
-            item._lang_code  = code
-            item._lang_flag  = flag
-            item._lang_name  = name
+            item = rumps.MenuItem(f"   {flag}  {name}", callback=self._set_lang)
+            item._lang_code = code
+            item._lang_flag = flag
+            item._lang_name = name
             self.lang_items.append(item)
 
         self.menu = [
@@ -80,6 +81,8 @@ class WisperBar(rumps.App):
             rumps.MenuItem("Beenden", callback=lambda _: rumps.quit_application()),
         ]
         self._refresh_actions()
+        for item in self.lang_items:
+            self._apply_lang_style(item, item._lang_code == self.lang_code)
 
     # ── Modell laden ──────────────────────────────────────────────────────────
 
@@ -140,7 +143,7 @@ class WisperBar(rumps.App):
 
     def _transcribe(self):
         if not self.frames:
-            self.title = "🟢 🎙"
+            self.title = "🔴 🎙"
             self.lbl_status.title = "✅  Bereit  –  fn + Shift"
             return
 
@@ -192,16 +195,21 @@ class WisperBar(rumps.App):
 
     # ── Sprache ───────────────────────────────────────────────────────────────
 
-    @staticmethod
-    def _lang_title(flag, name, active):
+    def _apply_lang_style(self, item, active):
+        title = f"【{item._lang_flag}  {item._lang_name}】" if active else f"   {item._lang_flag}  {item._lang_name}"
         if active:
-            return f"▶ {flag}  {name} ◀"
-        return f"   {flag}  {name}"
+            attrs = {NSForegroundColorAttributeName: NSColor.redColor()}
+            item._menuitem.setAttributedTitle_(
+                NSAttributedString.alloc().initWithString_attributes_(title, attrs)
+            )
+        else:
+            item._menuitem.setAttributedTitle_(None)
+            item.title = title
 
     def _set_lang(self, sender):
         self.lang_code = sender._lang_code
         for item in self.lang_items:
-            item.title = self._lang_title(item._lang_flag, item._lang_name, item._lang_code == self.lang_code)
+            self._apply_lang_style(item, item._lang_code == self.lang_code)
 
     # ── fn + Shift Erkennung ──────────────────────────────────────────────────
 
