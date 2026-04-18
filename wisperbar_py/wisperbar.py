@@ -127,6 +127,16 @@ class WisperBar(rumps.App):
 
     # ── Transkription ─────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _normalize_text(text):
+        import re
+        text = re.sub(r'\b[Kk]omma\b',  ',', text)
+        text = re.sub(r'\b[Pp]unto\b',  '.', text)
+        text = re.sub(r'\b[Pp]unkt\b',  '.', text)
+        text = re.sub(r',\s*,+',        ',', text)
+        text = re.sub(r'\.(\s*\.)+',    '.', text)
+        return text
+
     def _transcribe(self):
         if not self.frames:
             self.title = "🎤"
@@ -135,7 +145,7 @@ class WisperBar(rumps.App):
 
         audio = np.concatenate(self.frames).flatten()
         segs, _ = self.model.transcribe(audio, language=self.lang_code, beam_size=5)
-        text = " ".join(s.text.strip() for s in segs).strip()
+        text = self._normalize_text(" ".join(s.text.strip() for s in segs).strip())
 
         self.transcript = text
         self.title = "🎤"
