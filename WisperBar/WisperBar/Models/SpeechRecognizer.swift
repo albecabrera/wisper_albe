@@ -240,6 +240,15 @@ final class SpeechRecognizer: NSObject, ObservableObject {
 
                 // ── Fehlerbehandlung ──────────────────────────────────────────
                 if let error = error as NSError? {
+                    // Antes de reiniciar, guardar el interim acumulado.
+                    // Apple cancela la sesión al procesar "Punkt"/"Komma" como
+                    // comandos de dictado — sin pasar por isFinal — y el interim
+                    // se perdería sin este guardado.
+                    if !self.interimTranscript.isEmpty {
+                        self.transcript += (self.transcript.isEmpty ? "" : " ") + self.interimTranscript
+                        self.interimTranscript = ""
+                    }
+
                     // Alle kAFAssistantErrorDomain-Fehler kommen vom Apple-Server –
                     // für lokale Nutzung irrelevant; Session einfach neu starten.
                     if error.domain == "kAFAssistantErrorDomain" {
