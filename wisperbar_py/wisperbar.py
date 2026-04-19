@@ -23,6 +23,14 @@ LANGUAGES   = [
     ("🇪🇸", "Español", "es"),
 ]
 
+# Le indica al modelo que "Komma", "Punkt", etc. son palabras dictadas, no comandos.
+# Esto reduce alucinaciones y pérdida de contexto en el modelo base.
+INITIAL_PROMPTS = {
+    "de": "Komma Punkt Absatz",
+    "es": "coma punto punto y aparte",
+    "en": "",
+}
+
 
 class WisperBar(rumps.App):
 
@@ -134,11 +142,12 @@ class WisperBar(rumps.App):
     @staticmethod
     def _normalize_text(text):
         import re
-        text = re.sub(r'\b[Kk]omma\b',        ',',    text)
         text = re.sub(r'\bpunto y aparte\b', '\n\n', text, flags=re.IGNORECASE)
         text = re.sub(r'\b[Aa]bsatz\b',      '\n\n', text)
-        text = re.sub(r'\b[Pp]unto\b',       '.',    text)
-        text = re.sub(r'\b[Pp]unkt\b',       '.',    text)
+        text = re.sub(r'\b[Kk]omma\b',       ',',    text)
+        text = re.sub(r'\bcoma\b',            ',',    text, flags=re.IGNORECASE)
+        text = re.sub(r'\b[Pp]unto\b',        '.',    text)
+        text = re.sub(r'\b[Pp]unkt\b',        '.',    text)
         text = re.sub(r',\s*,+',        ',', text)
         text = re.sub(r'\.(\s*\.)+',    '.', text)
         return text
@@ -150,7 +159,13 @@ class WisperBar(rumps.App):
             return
 
         audio = np.concatenate(self.frames).flatten()
-        segs, _ = self.model.transcribe(audio, language=self.lang_code, beam_size=5)
+        segs, _ = self.model.transcribe(
+            audio,
+            language=self.lang_code,
+            beam_size=5,
+            initial_prompt=INITIAL_PROMPTS.get(self.lang_code, ""),
+            condition_on_previous_text=False,
+        )
         text = self._normalize_text(" ".join(s.text.strip() for s in segs).strip())
 
         self.transcript = text
