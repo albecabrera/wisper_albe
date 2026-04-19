@@ -210,13 +210,21 @@ final class SpeechRecognizer: NSObject, ObservableObject {
                     let rawText = result.bestTranscription.formattedString
                     let text = self.normalizeText(rawText)
                     if result.isFinal {
-                        // Apple puede descartar palabras anteriores cuando trata
-                        // "Komma" como comando de puntuación — el resultado final
-                        // llega solo con "," y pierde el interim acumulado.
-                        // Si el final es más corto que el interim, el interim es más completo.
-                        let textToAppend = text.count >= self.interimTranscript.count
-                            ? text
-                            : self.interimTranscript
+                        // Apple trata "Punkt"/"Komma" como comandos de dictado:
+                        // devuelve solo el signo ("." o ",") y descarta las palabras previas
+                        // que estaban en interimTranscript. Solución: si el resultado final
+                        // es solo puntuación, combinar interim + signo.
+                        let trimmed = text.trimmingCharacters(in: .whitespaces)
+                        let isPunctuationOnly = !trimmed.isEmpty &&
+                            trimmed.unicodeScalars.allSatisfy { CharacterSet(charactersIn: ".,!?;:\n").contains($0) }
+                        let textToAppend: String
+                        if isPunctuationOnly && !self.interimTranscript.isEmpty {
+                            textToAppend = self.interimTranscript + trimmed
+                        } else if text.count >= self.interimTranscript.count {
+                            textToAppend = text
+                        } else {
+                            textToAppend = self.interimTranscript
+                        }
                         if !textToAppend.isEmpty {
                             self.transcript += (self.transcript.isEmpty ? "" : " ") + textToAppend
                         }
