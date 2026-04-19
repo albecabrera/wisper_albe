@@ -153,6 +153,12 @@ class WisperBar(rumps.App):
         text = re.sub(r'\b[Pp]unkt\b',        '.',    text)
         text = re.sub(r',\s*,+',        ',', text)
         text = re.sub(r'\.(\s*\.)+',    '.', text)
+        # Capitalizar la primera letra de cada párrafo nuevo
+        parts = text.split('\n\n')
+        text = '\n\n'.join(
+            (p[0].upper() + p[1:] if p and p[0].islower() else p)
+            for p in parts
+        )
         return text
 
     def _transcribe(self):

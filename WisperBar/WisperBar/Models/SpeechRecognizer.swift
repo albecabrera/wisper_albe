@@ -392,6 +392,13 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         if let regex = try? NSRegularExpression(pattern: #"\.+"#, options: []) {
             text = regex.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: ".")
         }
+        // Capitalizar la primera letra de cada párrafo nuevo (\n\n)
+        let paragraphs = text.components(separatedBy: "\n\n")
+        text = paragraphs.enumerated().map { idx, para in
+            guard idx > 0, let first = para.first, first.isLowercase else { return para }
+            return para.prefix(1).uppercased() + para.dropFirst()
+        }.joined(separator: "\n\n")
+
         return text.trimmingCharacters(in: .whitespaces)
     }
 
