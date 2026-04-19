@@ -225,12 +225,23 @@ final class SpeechRecognizer: NSObject, ObservableObject {
                         self.restartSession()
                         return
                     } else {
-                        // Resultado parcial: solo sobreescribir si el nuevo texto
-                        // tiene letras. Si Apple manda solo "." (por "Punkt"),
-                        // anexar al interim existente para no borrar las palabras previas.
                         if text.rangeOfCharacter(from: .letters) != nil {
+                            // Detectar reset de contexto de Apple: ocurre con "Komma" cuando
+                            // Apple inserta "," y reinicia su contexto interno sin disparar
+                            // isFinal. El siguiente no-final arranca desde cero (más corto)
+                            // y sobreescribiría las palabras anteriores.
+                            // Si el interim termina en puntuación y el nuevo texto es más
+                            // corto → Apple reseteó; hacer commit del interim primero.
+                            let interimEndsPunct = self.interimTranscript.last
+                                .map { ".,".contains($0) } ?? false
+                            if interimEndsPunct && text.count < self.interimTranscript.count {
+                                self.transcript += (self.transcript.isEmpty ? "" : " ")
+                                    + self.interimTranscript
+                                self.interimTranscript = ""
+                            }
                             self.interimTranscript = text
                         } else {
+                            // Solo puntuación (ej: "." por "Punkt"): anexar, no reemplazar.
                             self.interimTranscript += text.trimmingCharacters(in: .whitespaces)
                         }
                     }
