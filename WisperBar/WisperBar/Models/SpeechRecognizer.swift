@@ -210,8 +210,15 @@ final class SpeechRecognizer: NSObject, ObservableObject {
                     let rawText = result.bestTranscription.formattedString
                     let text = self.normalizeText(rawText)
                     if result.isFinal {
-                        if !text.isEmpty {
-                            self.transcript += (self.transcript.isEmpty ? "" : " ") + text
+                        // Apple puede descartar palabras anteriores cuando trata
+                        // "Komma" como comando de puntuación — el resultado final
+                        // llega solo con "," y pierde el interim acumulado.
+                        // Si el final es más corto que el interim, el interim es más completo.
+                        let textToAppend = text.count >= self.interimTranscript.count
+                            ? text
+                            : self.interimTranscript
+                        if !textToAppend.isEmpty {
+                            self.transcript += (self.transcript.isEmpty ? "" : " ") + textToAppend
                         }
                         self.interimTranscript = ""
                         // Apple beendet die Task nach jedem finalen Ergebnis (≈60 s Limit).

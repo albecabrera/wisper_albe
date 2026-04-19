@@ -142,6 +142,9 @@ class WisperBar(rumps.App):
     @staticmethod
     def _normalize_text(text):
         import re
+        # Aplanar cualquier \n que Whisper inserte por su cuenta, para que
+        # solo nuestros comandos explícitos creen párrafos nuevos.
+        text = re.sub(r'[ \t\r\n]+', ' ', text).strip()
         text = re.sub(r'\bpunto y aparte\b', '\n\n', text, flags=re.IGNORECASE)
         text = re.sub(r'\b[Aa]bsatz\b',      '\n\n', text)
         text = re.sub(r'\b[Kk]omma\b',       ',',    text)
