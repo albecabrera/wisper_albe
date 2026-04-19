@@ -209,54 +209,40 @@ final class SpeechRecognizer: NSObject, ObservableObject {
                 if let result {
                     let rawText = result.bestTranscription.formattedString
                     let text = self.normalizeText(rawText)
+
                     if result.isFinal {
-                        // Apple trata "Punkt"/"Komma" como comandos de dictado:
-                        // devuelve el signo sin las palabras previas del interim.
-                        // Criterio: si el final no contiene ninguna letra (solo
-                        // puntuación / espacios / saltos) pero el interim sí tiene
-                        // contenido → combinar interim + signo para no perder palabras.
+                        // Actualizar interim con el mejor texto disponible antes
+                        // de que restartSession() lo vuelque a transcript.
                         let finalHasLetters = text.rangeOfCharacter(from: .letters) != nil
-                        let textToAppend: String
                         if !finalHasLetters && !self.interimTranscript.isEmpty {
-                            textToAppend = self.interimTranscript +
-                                text.trimmingCharacters(in: .whitespaces)
+                            // Apple devolvió solo puntuación (ej: "." por "Punkt"):
+                            // anexar al interim que tiene las palabras previas.
+                            self.interimTranscript += text.trimmingCharacters(in: .whitespaces)
                         } else if text.count >= self.interimTranscript.count {
-                            textToAppend = text
-                        } else {
-                            textToAppend = self.interimTranscript
+                            self.interimTranscript = text
                         }
-                        if !textToAppend.isEmpty {
-                            self.transcript += (self.transcript.isEmpty ? "" : " ") + textToAppend
-                        }
-                        self.interimTranscript = ""
-                        // Apple beendet die Task nach jedem finalen Ergebnis (≈60 s Limit).
-                        // Solange der Nutzer noch aufnimmt, direkt neu starten.
+                        // restartSession() vuelca interimTranscript → transcript
                         self.restartSession()
                         return
                     } else {
-                        self.interimTranscript = text
+                        // Resultado parcial: solo sobreescribir si el nuevo texto
+                        // tiene letras. Si Apple manda solo "." (por "Punkt"),
+                        // anexar al interim existente para no borrar las palabras previas.
+                        if text.rangeOfCharacter(from: .letters) != nil {
+                            self.interimTranscript = text
+                        } else {
+                            self.interimTranscript += text.trimmingCharacters(in: .whitespaces)
+                        }
                     }
                 }
 
                 // ── Fehlerbehandlung ──────────────────────────────────────────
                 if let error = error as NSError? {
-                    // Antes de reiniciar, guardar el interim acumulado.
-                    // Apple cancela la sesión al procesar "Punkt"/"Komma" como
-                    // comandos de dictado — sin pasar por isFinal — y el interim
-                    // se perdería sin este guardado.
-                    if !self.interimTranscript.isEmpty {
-                        self.transcript += (self.transcript.isEmpty ? "" : " ") + self.interimTranscript
-                        self.interimTranscript = ""
-                    }
-
-                    // Alle kAFAssistantErrorDomain-Fehler kommen vom Apple-Server –
-                    // für lokale Nutzung irrelevant; Session einfach neu starten.
+                    // restartSession() se encarga de volcar interimTranscript.
                     if error.domain == "kAFAssistantErrorDomain" {
                         self.restartSession()
                         return
                     }
-
-                    // Sonstige harmlose System-Codes (Stille, Abbruch, URL-Cancel)
                     let benignCodes: Set<Int> = [203, 209, -999]
                     let isBenign = benignCodes.contains(error.code) ||
                                    error.localizedDescription.lowercased().contains("cancel")
@@ -295,6 +281,12 @@ final class SpeechRecognizer: NSObject, ObservableObject {
     /// Wird nach Apple-Timeouts, Server-Fehlern und finalen Ergebnissen aufgerufen.
     private func restartSession() {
         guard isSessionActive else { return }
+        // Punto único de vaciado: guardar todo interim pendiente en transcript
+        // antes de cualquier reinicio (timeout, error, isFinal, cancelación).
+        if !interimTranscript.isEmpty {
+            transcript += (transcript.isEmpty ? "" : " ") + interimTranscript
+            interimTranscript = ""
+        }
         audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
         recognitionRequest?.endAudio()
