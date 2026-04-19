@@ -281,12 +281,18 @@ final class SpeechRecognizer: NSObject, ObservableObject {
     /// Wird nach Apple-Timeouts, Server-Fehlern und finalen Ergebnissen aufgerufen.
     private func restartSession() {
         guard isSessionActive else { return }
-        // Punto único de vaciado: guardar todo interim pendiente en transcript
-        // antes de cualquier reinicio (timeout, error, isFinal, cancelación).
+
+        // Cerrar el flag ANTES de cancelar para que el callback de cancelación
+        // encuentre isSessionActive=false y salga inmediatamente, evitando
+        // la cascada de reinicios que corrompía el estado.
+        isSessionActive = false
+
+        // Volcar todo interim pendiente antes de destruir la sesión.
         if !interimTranscript.isEmpty {
             transcript += (transcript.isEmpty ? "" : " ") + interimTranscript
             interimTranscript = ""
         }
+
         audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
         recognitionRequest?.endAudio()
@@ -294,9 +300,11 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         recognitionRequest = nil
         recognitionTask   = nil
 
+        // Usar recordingState para saber si el usuario sigue grabando,
+        // ya que isSessionActive está temporalmente en false.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-            guard let self, self.isSessionActive else { return }
-            self.beginSession()
+            guard let self, self.recordingState.isRecording else { return }
+            self.beginSession()   // beginSession pone isSessionActive=true
         }
     }
 
