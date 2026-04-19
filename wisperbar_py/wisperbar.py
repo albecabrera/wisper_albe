@@ -134,9 +134,11 @@ class WisperBar(rumps.App):
     @staticmethod
     def _normalize_text(text):
         import re
-        text = re.sub(r'\b[Kk]omma\b',  ',', text)
-        text = re.sub(r'\b[Pp]unto\b',  '.', text)
-        text = re.sub(r'\b[Pp]unkt\b',  '.', text)
+        text = re.sub(r'\b[Kk]omma\b',        ',',    text)
+        text = re.sub(r'\bpunto y aparte\b', '\n\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'\b[Aa]bsatz\b',      '\n\n', text)
+        text = re.sub(r'\b[Pp]unto\b',       '.',    text)
+        text = re.sub(r'\b[Pp]unkt\b',       '.',    text)
         text = re.sub(r',\s*,+',        ',', text)
         text = re.sub(r'\.(\s*\.)+',    '.', text)
         return text

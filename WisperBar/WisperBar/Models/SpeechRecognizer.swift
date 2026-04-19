@@ -334,10 +334,12 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         var text = input
         // "coma" / "Komma" → ","  |  "punto" / "Punkt" → "."
         let replacements: [(pattern: String, replacement: String)] = [
-            (#"\s*\b[Kk]omma\b\s*"#,  ","),
-            (#"\s*\bcoma\b\s*"#,       ","),
-            (#"\s*\b[Pp]unkt\b\s*"#,  "."),
-            (#"\s*\bpunto\b\s*"#,      "."),
+            (#"\s*\b[Kk]omma\b\s*"#,           ","),
+            (#"\s*\bcoma\b\s*"#,                ","),
+            (#"\s*\b[Pp]unkt\b\s*"#,           "."),
+            (#"\s*\bpunto\b\s*"#,               "."),
+            (#"\s*\bpunto y aparte\b\s*"#,     "\n\n"),
+            (#"\s*\b[Aa]bsatz\b\s*"#,          "\n\n"),
         ]
         for (pattern, replacement) in replacements {
             if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
