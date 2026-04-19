@@ -3,6 +3,7 @@
 import Foundation
 
 extension Notification.Name {
-    /// Popover schließen (z.B. nach "Einfügen")
-    static let wbClosePopover = Notification.Name("com.wisperbar.closePopover")
+    static let wbClosePopover  = Notification.Name("com.wisperbar.closePopover")
+    /// Posted when transcript is ready to paste; AppDelegate closes popover first, then pastes.
+    static let wbReadyToPaste  = Notification.Name("com.wisperbar.readyToPaste")
 }

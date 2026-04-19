@@ -41,6 +41,14 @@ enum DictationLanguage: String, CaseIterable, Identifiable {
         case .spanish: return "🇪🇸"
         }
     }
+
+    var shortName: String {
+        switch self {
+        case .german:  return "DE"
+        case .english: return "EN"
+        case .spanish: return "ES"
+        }
+    }
 }
 
 // MARK: – SpeechRecognizer
@@ -105,11 +113,11 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         }
     }
 
-    /// Aufnahme stoppen, Text in Zwischenablage sichern und automatisch einfügen.
-    func stopRecording() {
+    /// Aufnahme stoppen und Text sichern. Paste wird via AppDelegate koordiniert,
+    /// damit das Popover zuerst geschlossen wird und die Hintergrund-App den Fokus bekommt.
+    func stopRecording(autoPaste: Bool = true) {
         guard recordingState.isRecording else { return }
 
-        // Vorläufigen Text sichern BEVOR endSession() den Callback blockiert
         if !interimTranscript.isEmpty {
             let text = normalizeText(interimTranscript.trimmingCharacters(in: .whitespaces))
             if !text.isEmpty {
@@ -121,11 +129,18 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         endSession()
         recordingState = .idle
 
-        // Text automatisch in Zwischenablage und in aktives Textfeld einfügen
         if !transcript.isEmpty {
             copyToClipboard()
-            simulatePaste()
+            if autoPaste {
+                NotificationCenter.default.post(name: .wbReadyToPaste, object: nil)
+            }
         }
+    }
+
+    /// Öffentliche Methode: Text in aktives Textfeld einfügen (Cmd+V).
+    func pasteToActiveApp() {
+        copyToClipboard()
+        simulatePaste()
     }
 
     func clearTranscript() {
@@ -142,8 +157,7 @@ final class SpeechRecognizer: NSObject, ObservableObject {
 
     func insertAtCursor() {
         guard !transcript.isEmpty else { return }
-        copyToClipboard()
-        simulatePaste()
+        NotificationCenter.default.post(name: .wbReadyToPaste, object: nil)
     }
 
     // MARK: – Sprachmodell neu aufbauen

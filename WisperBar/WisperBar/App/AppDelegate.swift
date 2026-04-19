@@ -47,8 +47,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let pop = NSPopover()
         pop.contentViewController = NSHostingController(rootView: content)
-        pop.contentSize = NSSize(width: 400, height: 520)
-        pop.behavior = .transient     // Schließt bei Klick außerhalb
+        pop.contentSize = NSSize(width: 560, height: 640)
+        pop.behavior = .transient
         pop.animates = true
         self.popover = pop
     }
@@ -65,6 +65,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self, selector: #selector(closePopover),
             name: .wbClosePopover, object: nil
         )
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(handleReadyToPaste),
+            name: .wbReadyToPaste, object: nil
+        )
+    }
+
+    /// Cierra el popover para que la app de fondo recupere el foco, luego pega.
+    @objc private func handleReadyToPaste() {
+        popover?.performClose(nil)
+        // 650 ms gives macOS enough time to close the popover animation
+        // and return keyboard focus to the previously active app.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) { [weak self] in
+            self?.speechRecognizer.pasteToActiveApp()
+        }
     }
 
     // MARK: – Aktionen
