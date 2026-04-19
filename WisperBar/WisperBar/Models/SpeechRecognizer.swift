@@ -359,22 +359,31 @@ final class SpeechRecognizer: NSObject, ObservableObject {
 
     // MARK: – Cmd+V simulieren
 
-    private func simulatePaste() {
-        // Accessibility-Erlaubnis prüfen (notwendig für CGEvent-Posting)
-        let trusted = AXIsProcessTrusted()
-        if !trusted {
+    func simulatePaste() {
+        if AXIsProcessTrusted() {
+            // Primary: CGEvent — direct, synchronous, no extra process
+            let src  = CGEventSource(stateID: .hidSystemState)
+            let vKey: CGKeyCode = 9
+            if let down = CGEvent(keyboardEventSource: src, virtualKey: vKey, keyDown: true),
+               let up   = CGEvent(keyboardEventSource: src, virtualKey: vKey, keyDown: false) {
+                down.flags = .maskCommand
+                up.flags   = .maskCommand
+                down.post(tap: .cghidEventTap)
+                up.post(tap: .cghidEventTap)
+            }
+        } else {
+            // No Accessibility permission yet: prompt the user and fall back to osascript.
+            // osascript runs under its own process identity and may still succeed
+            // while WisperBar's permission is being granted.
             let opts = [kAXTrustedCheckOptionPrompt.takeRetainedValue() as String: true] as CFDictionary
             AXIsProcessTrustedWithOptions(opts)
-            return
+
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+            task.arguments = ["-e",
+                "tell application \"System Events\" to keystroke \"v\" using command down"]
+            try? task.run()
         }
-        let src = CGEventSource(stateID: .hidSystemState)
-        let vKey: CGKeyCode = 9
-        let down = CGEvent(keyboardEventSource: src, virtualKey: vKey, keyDown: true)
-        let up   = CGEvent(keyboardEventSource: src, virtualKey: vKey, keyDown: false)
-        down?.flags = .maskCommand
-        up?.flags   = .maskCommand
-        down?.post(tap: .cghidEventTap)
-        up?.post(tap: .cghidEventTap)
     }
 }
 

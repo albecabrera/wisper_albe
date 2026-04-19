@@ -1,38 +1,33 @@
 // AppDelegate.swift
-// Verwaltet NSStatusItem (Menüleisten-Icon) und NSPopover.
 import AppKit
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
-    // MARK: – Eigenschaften
-
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     private var hotKeyManager: HotKeyManager?
 
-    /// Gemeinsames Modell – wird per EnvironmentObject weitergegeben
     let speechRecognizer = SpeechRecognizer()
 
-    // MARK: – App-Lifecycle
+    /// The app that was frontmost when the popover was opened — paste target.
+    private var previousApp: NSRunningApplication?
+
+    // MARK: – Lifecycle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // App nicht im Dock anzeigen
         NSApp.setActivationPolicy(.accessory)
-
         setupStatusItem()
         setupPopover()
         setupHotKey()
         registerNotifications()
     }
 
-    // MARK: – Aufbau
+    // MARK: – Setup
 
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-
         guard let button = statusItem?.button else { return }
-        // SF Symbol als Template-Image (passt sich Dark/Light Mode an)
         let img = NSImage(systemSymbolName: "waveform.and.mic", accessibilityDescription: "WisperBar")
         img?.isTemplate = true
         button.image = img
@@ -42,9 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupPopover() {
-        let content = PopoverView()
-            .environmentObject(speechRecognizer)
-
+        let content = PopoverView().environmentObject(speechRecognizer)
         let pop = NSPopover()
         pop.contentViewController = NSHostingController(rootView: content)
         pop.contentSize = NSSize(width: 560, height: 640)
@@ -71,22 +64,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    /// Cierra el popover para que la app de fondo recupere el foco, luego pega.
+    // MARK: – Paste coordination
+    //
+    // When the popover is open, WisperBar owns the keyboard focus.
+    // To paste into the user's real app we must:
+    //   1. Close the popover (starts ~200 ms close animation)
+    //   2. Explicitly re-activate the app that was frontmost before we stole focus
+    //   3. Wait a small extra moment for it to become key
+    //   4. Send Cmd+V
+
     @objc private func handleReadyToPaste() {
+        let target = previousApp          // the app to paste into
         popover?.performClose(nil)
-        // 650 ms gives macOS enough time to close the popover animation
-        // and return keyboard focus to the previously active app.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) { [weak self] in
-            self?.speechRecognizer.pasteToActiveApp()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            // Re-activate the target app so it owns the keyboard
+            target?.activate(options: .activateIgnoringOtherApps)
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                self?.speechRecognizer.pasteToActiveApp()
+            }
         }
     }
 
-    // MARK: – Aktionen
+    // MARK: – Actions
 
     @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
-        let event = NSApp.currentEvent
-
-        if event?.type == .rightMouseUp {
+        if NSApp.currentEvent?.type == .rightMouseUp {
             showContextMenu()
         } else {
             togglePopover()
@@ -96,7 +100,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showContextMenu() {
         let menu = NSMenu()
         menu.addItem(
-            withTitle: speechRecognizer.recordingState == .recording ? "Aufnahme stoppen" : "Aufnahme starten",
+            withTitle: speechRecognizer.recordingState == .recording
+                ? "Aufnahme stoppen" : "Aufnahme starten",
             action: #selector(toggleRecordingFromMenu),
             keyEquivalent: ""
         )
@@ -104,7 +109,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "Beenden", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         statusItem?.menu = menu
         statusItem?.button?.performClick(nil)
-        // Menü-Referenz danach entfernen, damit linker Klick wieder den Popover öffnet
         DispatchQueue.main.async { self.statusItem?.menu = nil }
     }
 
@@ -117,22 +121,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let pop = popover, pop.isShown {
             pop.performClose(nil)
         } else {
+            // Capture frontmost app BEFORE we steal focus
+            previousApp = NSWorkspace.shared.frontmostApplication
             popover?.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             NSApp.activate(ignoringOtherApps: true)
         }
     }
 
-    /// Wird vom globalen Hotkey aufgerufen
     private func activateViaHotKey() {
         guard let button = statusItem?.button else { return }
-
-        // Popover öffnen falls nötig
         if popover?.isShown == false {
+            // Capture frontmost app BEFORE opening the popover
+            previousApp = NSWorkspace.shared.frontmostApplication
             popover?.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             NSApp.activate(ignoringOtherApps: true)
         }
-
-        // Aufnahme umschalten
         speechRecognizer.toggle()
     }
 
