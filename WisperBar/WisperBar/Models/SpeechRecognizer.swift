@@ -233,7 +233,7 @@ final class SpeechRecognizer: NSObject, ObservableObject {
                             // Si el interim termina en puntuación y el nuevo texto es más
                             // corto → Apple reseteó; hacer commit del interim primero.
                             let interimEndsPunct = self.interimTranscript.last
-                                .map { ".,".contains($0) } ?? false
+                                .map { ".,!?:;".contains($0) } ?? false
                             if interimEndsPunct && text.count < self.interimTranscript.count {
                                 self.transcript += (self.transcript.isEmpty ? "" : " ")
                                     + self.interimTranscript
@@ -367,31 +367,74 @@ final class SpeechRecognizer: NSObject, ObservableObject {
 
     private func normalizeText(_ input: String) -> String {
         var text = input
-        // "coma" / "Komma" → ","  |  "punto" / "Punkt" → "."
+
+        // Phrasen zuerst, damit kürzere Muster nicht zuerst greifen
         let replacements: [(pattern: String, replacement: String)] = [
-            // frases largas primero para que no sean procesadas por patrones más cortos
-            (#"\s*\bpunto y aparte\b\s*"#,     "\n\n"),
-            (#"\s*\b[Aa]bsatz\b\s*"#,          "\n\n"),
-            (#"\s*\b[Kk]omma\b\s*"#,           ","),
-            (#"\s*\bcoma\b\s*"#,               ","),
-            (#"\s*\b[Pp]unkt\b\s*"#,           "."),
-            (#"\s*\bpunto\b\s*"#,              "."),
+            // ── Español (frases) ───────────────────────────────────────────
+            (#"\s*\bpunto y aparte\b\s*"#,              "\n\n"),
+            (#"\s*\bpunto y coma\b\s*"#,                ";"),
+            (#"\s*\bsigno de exclamaci[oó]n\b\s*"#,     "!"),
+            (#"\s*\bsigno de interrogaci[oó]n\b\s*"#,   "?"),
+            (#"\s*\bdos puntos\b\s*"#,                  ":"),
+            (#"\s*\bnueva l[ií]nea\b\s*"#,              "\n"),
+            // ── Deutsch ────────────────────────────────────────────────────
+            (#"\s*\b[Aa]bsatz\b\s*"#,                   "\n\n"),
+            (#"\s*\b[Nn]eue\s+[Zz]eile\b\s*"#,          "\n"),
+            (#"\s*\b[Zz]eilenumbruch\b\s*"#,             "\n"),
+            (#"\s*\b[Kk]omma\b\s*"#,                    ","),
+            (#"\s*\b[Pp]unkt\b\s*"#,                    "."),
+            (#"\s*\b[Aa]usrufezeichen\b\s*"#,            "!"),
+            (#"\s*\b[Ff]ragezeichen\b\s*"#,              "?"),
+            (#"\s*\b[Dd]oppelpunkt\b\s*"#,               ":"),
+            (#"\s*\b[Ss]emikolon\b\s*"#,                 ";"),
+            (#"\s*\b[Ss]trichpunkt\b\s*"#,               ";"),
+            (#"\s*\b[Bb]indestrich\b\s*"#,               "-"),
+            // ── Español (palabras simples) ─────────────────────────────────
+            (#"\s*\bcoma\b\s*"#,                         ","),
+            (#"\s*\bpunto\b\s*"#,                        "."),
+            (#"\s*\bgu[ií][oó]n\b\s*"#,                 "-"),
         ]
+
         for (pattern, replacement) in replacements {
             if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
                 let range = NSRange(text.startIndex..., in: text)
                 text = regex.stringByReplacingMatches(in: text, range: range, withTemplate: replacement)
             }
         }
-        // Leerzeichen vor Satzzeichen entfernen, doppelte Satzzeichen reduzieren
-        text = text.replacingOccurrences(of: " ,", with: ",")
-        text = text.replacingOccurrences(of: " .", with: ".")
-        if let regex = try? NSRegularExpression(pattern: #",+"#, options: []) {
-            text = regex.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: ",")
+
+        // Leerzeichen vor Satzzeichen entfernen
+        for p in [".", ",", "!", "?", ":", ";"] {
+            text = text.replacingOccurrences(of: " \(p)", with: p)
         }
-        if let regex = try? NSRegularExpression(pattern: #"\.+"#, options: []) {
-            text = regex.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: ".")
+
+        // Doppelte Satzzeichen auf eins reduzieren
+        let dedup: [(String, String)] = [
+            (#",+"#, ","), (#"\.+"#, "."), (#"!+"#, "!"),
+            (#"\?+"#, "?"), (#":+"#, ":"), (#";+"#, ";"),
+        ]
+        for (pattern, replacement) in dedup {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+                let range = NSRange(text.startIndex..., in: text)
+                text = regex.stringByReplacingMatches(in: text, range: range, withTemplate: replacement)
+            }
         }
+
+        // Capitalizar tras punto/exclamación/interrogación dentro del chunk
+        var capitalized = ""
+        var pendingCap = false
+        for ch in text {
+            if pendingCap && ch.isLetter {
+                capitalized.append(contentsOf: ch.uppercased())
+                pendingCap = false
+            } else {
+                capitalized.append(ch)
+                if ".!?".contains(ch)   { pendingCap = true }
+                else if ch.isWhitespace  { /* mantener estado */ }
+                else                     { pendingCap = false }
+            }
+        }
+        text = capitalized
+
         // Capitalizar la primera letra de cada párrafo nuevo (\n\n)
         let paragraphs = text.components(separatedBy: "\n\n")
         text = paragraphs.enumerated().map { idx, para in
