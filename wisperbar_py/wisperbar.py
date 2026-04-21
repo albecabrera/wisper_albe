@@ -15,6 +15,12 @@ from faster_whisper import WhisperModel
 from pynput import keyboard as kb
 from AppKit import NSAttributedString, NSForegroundColorAttributeName, NSColor
 
+try:
+    import anthropic as _anthropic
+    _ANTHROPIC_AVAILABLE = True
+except ImportError:
+    _ANTHROPIC_AVAILABLE = False
+
 SAMPLE_RATE = 16_000
 MODEL_SIZE  = "base"
 LANGUAGES   = [
@@ -23,12 +29,125 @@ LANGUAGES   = [
     ("🇪🇸", "Español", "es"),
 ]
 
-# Le indica al modelo que "Komma", "Punkt", etc. son palabras dictadas, no comandos.
-# Esto reduce alucinaciones y pérdida de contexto en el modelo base.
+# ── Whisper initial_prompt ────────────────────────────────────────────────────
+# Texto de ejemplo que imita el dictado real con los comandos como palabras.
+# Whisper lo trata como "contexto anterior" y aprende a mantener Komma/Punkt/etc.
+# como palabras en la transcripción en lugar de convertirlos a símbolos.
 INITIAL_PROMPTS = {
-    "de": "Komma Punkt Absatz",
-    "es": "coma punto punto y aparte",
-    "en": "",
+    "de": (
+        "Guten Tag Komma ich diktiere jetzt diesen Text Punkt "
+        "Ich benutze Komma für kurze Pausen Komma und Punkt um einen Satz zu beenden Punkt "
+        "Mit Absatz beginne ich einen neuen Abschnitt Punkt "
+        "Ausrufezeichen Fragezeichen Doppelpunkt Semikolon und Bindestrich "
+        "sind weitere Befehle Punkt Neue Zeile macht einen einfachen Umbruch Punkt"
+    ),
+    "es": (
+        "Buenos días coma voy a dictar este texto punto "
+        "Uso coma para pausas coma y punto para terminar oraciones punto "
+        "Con punto y aparte comienzo un nuevo párrafo punto "
+        "Signo de exclamación signo de interrogación dos puntos "
+        "punto y coma y guión son otros comandos punto "
+        "Nueva línea hace un salto simple punto"
+    ),
+    "en": (
+        "Hello comma I am dictating this text period "
+        "I use comma for short pauses comma and period to end sentences period "
+        "With new paragraph I start a new section period "
+        "Exclamation mark question mark colon semicolon and hyphen "
+        "are further commands period New line creates a simple line break period"
+    ),
+}
+
+# ── Claude system prompts ─────────────────────────────────────────────────────
+# Usados para post-procesar el texto crudo de Whisper vía Claude API.
+# Cada prompt convierte los comandos de voz en puntuación real y aplica
+# capitalización correcta según las reglas del idioma.
+CLAUDE_SYSTEM_PROMPTS = {
+    "de": """\
+Du bist ein Diktat-Nachbearbeitungsassistent. Du erhältst rohes Whisper-Transkript \
+auf Deutsch, in dem der Sprecher Satzzeichen durch gesprochene Befehle angibt. \
+Deine einzige Aufgabe ist die Umwandlung in korrekt formatierten Text.
+
+BEFEHLSZUORDNUNG:
+• Komma → ,
+• Punkt → .
+• Ausrufezeichen → !
+• Fragezeichen → ?
+• Doppelpunkt → :
+• Semikolon / Strichpunkt → ;
+• Bindestrich → -
+• Absatz / Neuer Absatz → [zwei Zeilenumbrüche, d. h. neuer Absatz]
+• Neue Zeile / Zeilenumbruch → [ein Zeilenumbruch]
+
+FORMATIERUNGSREGELN:
+1. Nach Punkt, Ausrufezeichen oder Fragezeichen: erstes Wort des nächsten Satzes \
+großschreiben (sofern nicht bereits groß).
+2. Nach Komma: Satz läuft weiter, kein Großbuchstabe.
+3. Nach Absatz: erstes Wort des neuen Absatzes großschreiben.
+4. Kein Leerzeichen vor Satzzeichen einfügen.
+5. Mehrfach aufeinanderfolgende gleiche Satzzeichen auf eines reduzieren.
+6. Mehrere Absatz-Befehle hintereinander: auf einen Absatzumbruch reduzieren.
+7. Originalwörter des Sprechers vollständig erhalten – nichts hinzufügen, \
+kürzen oder umformulieren.
+8. Nur den fertigen Text ausgeben – keinerlei Erklärungen oder Kommentare.\
+""",
+
+    "es": """\
+Eres un asistente de posprocesamiento de dictado. Recibes transcripciones brutas \
+de Whisper en español donde el hablante indica la puntuación mediante comandos de voz. \
+Tu única tarea es convertirlas en texto correctamente formateado.
+
+MAPA DE COMANDOS:
+• coma → ,
+• punto → .
+• signo de exclamación → !
+• signo de interrogación → ?
+• dos puntos → :
+• punto y coma → ;
+• guión → -
+• punto y aparte / párrafo nuevo → [dos saltos de línea, es decir, párrafo nuevo]
+• nueva línea / salto de línea → [un salto de línea]
+
+REGLAS DE FORMATO:
+1. Tras punto, signo de exclamación o signo de interrogación: capitalizar la primera \
+letra de la siguiente oración (si no lo está ya).
+2. Tras coma: la oración continúa, no capitalizar.
+3. Tras punto y aparte: capitalizar la primera palabra del nuevo párrafo.
+4. Ningún espacio antes de los signos de puntuación.
+5. Signos duplicados consecutivos reducirlos a uno.
+6. Múltiples "punto y aparte" seguidos: reducir a un único salto de párrafo.
+7. Conservar íntegramente las palabras del hablante – no añadir, acortar \
+ni reformular el contenido.
+8. Devolver únicamente el texto formateado – sin explicaciones ni comentarios.\
+""",
+
+    "en": """\
+You are a dictation post-processing assistant. You receive raw Whisper transcripts \
+in English where the speaker indicates punctuation through spoken commands. \
+Your only task is to convert them into correctly formatted text.
+
+COMMAND MAP:
+• comma → ,
+• period / full stop → .
+• exclamation mark / exclamation point → !
+• question mark → ?
+• colon → :
+• semicolon → ;
+• hyphen / dash → -
+• new paragraph / paragraph break → [two line breaks, i.e. a new paragraph]
+• new line / line break → [one line break]
+
+FORMATTING RULES:
+1. After period, exclamation mark, or question mark: capitalize the first letter \
+of the next sentence (if not already capitalized).
+2. After comma: sentence continues, do not capitalize.
+3. After new paragraph: capitalize the first word of the new paragraph.
+4. No space before punctuation marks.
+5. Consecutive duplicate punctuation marks reduce to one.
+6. Multiple "new paragraph" commands in a row: reduce to a single paragraph break.
+7. Preserve the speaker's words in full – do not add, shorten, or rephrase content.
+8. Output only the formatted text – no explanations or comments.\
+""",
 }
 
 
@@ -161,6 +280,26 @@ class WisperBar(rumps.App):
         )
         return text
 
+    def _post_process_with_claude(self, raw_text: str) -> str:
+        """Post-procesa el texto crudo de Whisper con Claude API.
+        Devuelve el texto formateado, o raw_text si la API falla."""
+        if not _ANTHROPIC_AVAILABLE:
+            return self._normalize_text(raw_text)
+        try:
+            client = _anthropic.Anthropic()
+            msg = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=2048,
+                system=CLAUDE_SYSTEM_PROMPTS.get(
+                    self.lang_code,
+                    CLAUDE_SYSTEM_PROMPTS["en"],
+                ),
+                messages=[{"role": "user", "content": raw_text}],
+            )
+            return msg.content[0].text.strip()
+        except Exception:
+            return self._normalize_text(raw_text)
+
     def _transcribe(self):
         if not self.frames:
             self.title = "🔴 🎙"
@@ -175,7 +314,8 @@ class WisperBar(rumps.App):
             initial_prompt=INITIAL_PROMPTS.get(self.lang_code, ""),
             condition_on_previous_text=False,
         )
-        text = self._normalize_text(" ".join(s.text.strip() for s in segs).strip())
+        raw = " ".join(s.text.strip() for s in segs).strip()
+        text = self._post_process_with_claude(raw)
 
         self.transcript = text
         self.title = "🎤"
