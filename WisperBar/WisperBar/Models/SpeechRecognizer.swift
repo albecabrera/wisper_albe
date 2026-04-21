@@ -119,9 +119,10 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         guard recordingState.isRecording else { return }
 
         if !interimTranscript.isEmpty {
-            let text = normalizeText(interimTranscript.trimmingCharacters(in: .whitespaces))
+            let text = normalizeText(interimTranscript.trimmingCharacters(in: CharacterSet(charactersIn: " \t")))
             if !text.isEmpty {
-                transcript += (transcript.isEmpty ? "" : " ") + text
+                let sep = transcript.isEmpty || transcript.hasSuffix("\n") ? "" : " "
+                transcript += sep + text
             }
             interimTranscript = ""
         }
@@ -215,9 +216,10 @@ final class SpeechRecognizer: NSObject, ObservableObject {
                         // de que restartSession() lo vuelque a transcript.
                         let finalHasLetters = text.rangeOfCharacter(from: .letters) != nil
                         if !finalHasLetters && !self.interimTranscript.isEmpty {
-                            // Apple devolvió solo puntuación (ej: "." por "Punkt"):
-                            // anexar al interim que tiene las palabras previas.
-                            self.interimTranscript += text.trimmingCharacters(in: .whitespaces)
+                            // Apple devolvió solo puntuación o salto de párrafo:
+                            // anexar al interim. No trimear \n para preservar Absatz.
+                            let trimSet = CharacterSet(charactersIn: " \t")
+                            self.interimTranscript += text.trimmingCharacters(in: trimSet)
                         } else if text.count >= self.interimTranscript.count {
                             self.interimTranscript = text
                         }
@@ -230,19 +232,22 @@ final class SpeechRecognizer: NSObject, ObservableObject {
                             // Apple inserta "," y reinicia su contexto interno sin disparar
                             // isFinal. El siguiente no-final arranca desde cero (más corto)
                             // y sobreescribiría las palabras anteriores.
-                            // Si el interim termina en puntuación y el nuevo texto es más
-                            // corto → Apple reseteó; hacer commit del interim primero.
+                            // Si el interim termina en puntuación O salto de párrafo (\n)
+                            // y el nuevo texto es más corto → Apple reseteó su contexto;
+                            // hacer commit del interim primero para no perder palabras.
                             let interimEndsPunct = self.interimTranscript.last
-                                .map { ".,!?:;".contains($0) } ?? false
+                                .map { ".,!?:;\n".contains($0) } ?? false
                             if interimEndsPunct && text.count < self.interimTranscript.count {
-                                self.transcript += (self.transcript.isEmpty ? "" : " ")
-                                    + self.interimTranscript
+                                let sep = self.transcript.isEmpty || self.transcript.hasSuffix("\n") ? "" : " "
+                                self.transcript += sep + self.interimTranscript
                                 self.interimTranscript = ""
                             }
                             self.interimTranscript = text
                         } else {
-                            // Solo puntuación (ej: "." por "Punkt"): anexar, no reemplazar.
-                            self.interimTranscript += text.trimmingCharacters(in: .whitespaces)
+                            // Solo puntuación o salto de párrafo: anexar, no reemplazar.
+                            // Trimear solo espacios/tabs, NO newlines (Absatz → "\n\n").
+                            let trimSet = CharacterSet(charactersIn: " \t")
+                            self.interimTranscript += text.trimmingCharacters(in: trimSet)
                         }
                     }
                 }
@@ -299,8 +304,10 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         isSessionActive = false
 
         // Volcar todo interim pendiente antes de destruir la sesión.
+        // No añadir espacio si el transcript termina en salto de párrafo.
         if !interimTranscript.isEmpty {
-            transcript += (transcript.isEmpty ? "" : " ") + interimTranscript
+            let sep = transcript.isEmpty || transcript.hasSuffix("\n") ? "" : " "
+            transcript += sep + interimTranscript
             interimTranscript = ""
         }
 
