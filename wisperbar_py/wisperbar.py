@@ -120,8 +120,38 @@ CAPITALIZATION RULES:
 - In German: preserve existing capitalization of nouns
 
 --------------------------------
+EMOJI COMMANDS (all three languages):
+
+Only insert emojis when the user explicitly says "emoji [name]".
+If no "emoji" keyword appears → do NOT add any emoji.
+
+General:
+- "emoji sonrisa" / "emoji lächeln" / "emoji smile" → 🙂
+- "emoji risa" / "emoji lachen" / "emoji laugh" → 😂
+- "emoji triste" / "emoji traurig" / "emoji sad" → 😢
+- "emoji enfadado" / "emoji wütend" / "emoji angry" → 😠
+- "emoji corazón" / "emoji herz" / "emoji heart" → ❤️
+- "emoji pulgar arriba" / "emoji daumen hoch" / "emoji thumbs up" → 👍
+- "emoji aplausos" / "emoji applaus" / "emoji clap" → 👏
+- "emoji fuego" / "emoji feuer" / "emoji fire" → 🔥
+- "emoji ok" → 👌
+- "emoji check" → ✅
+
+School / Work:
+- "emoji profesor" / "emoji lehrer" / "emoji teacher" → 👨‍🏫
+- "emoji estudiante" / "emoji schüler" / "emoji student" → 🧑‍🎓
+- "emoji ordenador" / "emoji computer" → 💻
+- "emoji libro" / "emoji buch" / "emoji book" → 📚
+- "emoji idea" / "emoji idee" → 💡
+
+Emoji placement rules:
+- Place the emoji at its correct position in the sentence.
+- One space before the emoji; no space between emoji and following punctuation.
+- Repeated emoji commands → insert the emoji once per command.
+
+--------------------------------
 EDGE CASES:
-- Repeated commands (e.g. "punto punto") → single punctuation mark "."
+- Repeated punctuation commands (e.g. "punto punto") → single mark "."
 - Multiple paragraph commands in a row → single paragraph break
 - Remove duplicated spaces
 - No space before punctuation marks
@@ -149,6 +179,24 @@ hello comma how are you question mark new paragraph i hope you are well period
 Output:
 Hello, how are you?
 I hope you are well.
+
+Input:
+hola coma esto es muy divertido emoji risa
+
+Output:
+Hola, esto es muy divertido 😂
+
+Input:
+das war sehr gut emoji daumen hoch punkt
+
+Output:
+Das war sehr gut 👍.
+
+Input:
+this is a great idea emoji fire emoji fire
+
+Output:
+This is a great idea 🔥🔥
 
 --------------------------------
 
@@ -305,6 +353,54 @@ class WisperBar(rumps.App):
         text = re.sub(r'\b(hyphen|dash)\b',            '-',    text, flags=re.I)
         text = re.sub(r'\bcomma\b',                    ',',    text, flags=re.I)
 
+        # ── Emojis (todas las lenguas, frases primero) ───────────────────────
+        emoji_map = [
+            # Multi-word
+            (r'\bemoji\s+pulgar\s+arriba\b', '👍'),
+            (r'\bemoji\s+daumen\s+hoch\b',   '👍'),
+            (r'\bemoji\s+thumbs\s+up\b',     '👍'),
+            # Single-word – General
+            (r'\bemoji\s+sonrisa\b',   '🙂'),
+            (r'\bemoji\s+l[äa]cheln\b','🙂'),
+            (r'\bemoji\s+smile\b',     '🙂'),
+            (r'\bemoji\s+risa\b',      '😂'),
+            (r'\bemoji\s+lachen\b',    '😂'),
+            (r'\bemoji\s+laugh\b',     '😂'),
+            (r'\bemoji\s+triste\b',    '😢'),
+            (r'\bemoji\s+traurig\b',   '😢'),
+            (r'\bemoji\s+sad\b',       '😢'),
+            (r'\bemoji\s+enfadado\b',  '😠'),
+            (r'\bemoji\s+w[üu]tend\b', '😠'),
+            (r'\bemoji\s+angry\b',     '😠'),
+            (r'\bemoji\s+coraz[oó]n\b','❤️'),
+            (r'\bemoji\s+herz\b',      '❤️'),
+            (r'\bemoji\s+heart\b',     '❤️'),
+            (r'\bemoji\s+aplausos\b',  '👏'),
+            (r'\bemoji\s+applaus\b',   '👏'),
+            (r'\bemoji\s+clap\b',      '👏'),
+            (r'\bemoji\s+fuego\b',     '🔥'),
+            (r'\bemoji\s+feuer\b',     '🔥'),
+            (r'\bemoji\s+fire\b',      '🔥'),
+            (r'\bemoji\s+ok\b',        '👌'),
+            (r'\bemoji\s+check\b',     '✅'),
+            # Single-word – School/Work
+            (r'\bemoji\s+profesor\b',    '👨‍🏫'),
+            (r'\bemoji\s+lehrer\b',      '👨‍🏫'),
+            (r'\bemoji\s+teacher\b',     '👨‍🏫'),
+            (r'\bemoji\s+estudiante\b',  '🧑‍🎓'),
+            (r'\bemoji\s+sch[üu]ler\b',  '🧑‍🎓'),
+            (r'\bemoji\s+student\b',     '🧑‍🎓'),
+            (r'\bemoji\s+ordenador\b',   '💻'),
+            (r'\bemoji\s+computer\b',    '💻'),
+            (r'\bemoji\s+libro\b',       '📚'),
+            (r'\bemoji\s+buch\b',        '📚'),
+            (r'\bemoji\s+book\b',        '📚'),
+            (r'\bemoji\s+idea\b',        '💡'),
+            (r'\bemoji\s+idee\b',        '💡'),
+        ]
+        for pattern, emoji in emoji_map:
+            text = re.sub(pattern, f' {emoji}', text, flags=re.I)
+
         # Limpiar espacios antes de signos y duplicados
         for p in ['.', ',', '!', '?', ':', ';']:
             text = text.replace(f' {p}', p)
@@ -314,6 +410,9 @@ class WisperBar(rumps.App):
         text = re.sub(r'\?+',     '?', text)
         text = re.sub(r':+',      ':', text)
         text = re.sub(r';+',      ';', text)
+
+        # Espacios dobles (pueden quedar tras insertar emojis al inicio)
+        text = re.sub(r' {2,}', ' ', text).strip()
 
         # Capitalizar tras . ! ? y al inicio de cada párrafo
         parts = text.split('\n\n')

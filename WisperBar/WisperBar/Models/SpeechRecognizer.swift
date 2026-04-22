@@ -377,6 +377,46 @@ final class SpeechRecognizer: NSObject, ObservableObject {
 
         // Phrasen zuerst, damit kürzere Muster nicht zuerst greifen
         let replacements: [(pattern: String, replacement: String)] = [
+            // ── Emojis (alle Sprachen, Phrasen zuerst) ────────────────────
+            (#"\bemoji\s+pulgar\s+arriba\b\s*"#,    " 👍"),
+            (#"\bemoji\s+daumen\s+hoch\b\s*"#,      " 👍"),
+            (#"\bemoji\s+thumbs\s+up\b\s*"#,        " 👍"),
+            (#"\bemoji\s+sonrisa\b\s*"#,            " 🙂"),
+            (#"\bemoji\s+l[äa]cheln\b\s*"#,         " 🙂"),
+            (#"\bemoji\s+smile\b\s*"#,              " 🙂"),
+            (#"\bemoji\s+risa\b\s*"#,               " 😂"),
+            (#"\bemoji\s+lachen\b\s*"#,             " 😂"),
+            (#"\bemoji\s+laugh\b\s*"#,              " 😂"),
+            (#"\bemoji\s+triste\b\s*"#,             " 😢"),
+            (#"\bemoji\s+traurig\b\s*"#,            " 😢"),
+            (#"\bemoji\s+sad\b\s*"#,                " 😢"),
+            (#"\bemoji\s+enfadado\b\s*"#,           " 😠"),
+            (#"\bemoji\s+w[üu]tend\b\s*"#,          " 😠"),
+            (#"\bemoji\s+angry\b\s*"#,              " 😠"),
+            (#"\bemoji\s+coraz[oó]n\b\s*"#,         " ❤️"),
+            (#"\bemoji\s+herz\b\s*"#,               " ❤️"),
+            (#"\bemoji\s+heart\b\s*"#,              " ❤️"),
+            (#"\bemoji\s+aplausos\b\s*"#,           " 👏"),
+            (#"\bemoji\s+applaus\b\s*"#,            " 👏"),
+            (#"\bemoji\s+clap\b\s*"#,               " 👏"),
+            (#"\bemoji\s+fuego\b\s*"#,              " 🔥"),
+            (#"\bemoji\s+feuer\b\s*"#,              " 🔥"),
+            (#"\bemoji\s+fire\b\s*"#,               " 🔥"),
+            (#"\bemoji\s+ok\b\s*"#,                 " 👌"),
+            (#"\bemoji\s+check\b\s*"#,              " ✅"),
+            (#"\bemoji\s+profesor\b\s*"#,           " 👨‍🏫"),
+            (#"\bemoji\s+lehrer\b\s*"#,             " 👨‍🏫"),
+            (#"\bemoji\s+teacher\b\s*"#,            " 👨‍🏫"),
+            (#"\bemoji\s+estudiante\b\s*"#,         " 🧑‍🎓"),
+            (#"\bemoji\s+sch[üu]ler\b\s*"#,         " 🧑‍🎓"),
+            (#"\bemoji\s+student\b\s*"#,            " 🧑‍🎓"),
+            (#"\bemoji\s+ordenador\b\s*"#,          " 💻"),
+            (#"\bemoji\s+computer\b\s*"#,           " 💻"),
+            (#"\bemoji\s+libro\b\s*"#,              " 📚"),
+            (#"\bemoji\s+buch\b\s*"#,               " 📚"),
+            (#"\bemoji\s+book\b\s*"#,               " 📚"),
+            (#"\bemoji\s+idea\b\s*"#,               " 💡"),
+            (#"\bemoji\s+idee\b\s*"#,               " 💡"),
             // ── English (phrases first) ────────────────────────────────────
             (#"\s*\bnew\s+paragraph\b\s*"#,              "\n\n"),
             (#"\s*\bparagraph\s+break\b\s*"#,            "\n\n"),
@@ -422,6 +462,11 @@ final class SpeechRecognizer: NSObject, ObservableObject {
                 let range = NSRange(text.startIndex..., in: text)
                 text = regex.stringByReplacingMatches(in: text, range: range, withTemplate: replacement)
             }
+        }
+
+        // Doppelte Leerzeichen entfernen (können nach Emoji-Einfügung entstehen)
+        if let re = try? NSRegularExpression(pattern: #" {2,}"#, options: []) {
+            text = re.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: " ")
         }
 
         // Leerzeichen vor Satzzeichen entfernen
