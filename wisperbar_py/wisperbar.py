@@ -58,97 +58,102 @@ INITIAL_PROMPTS = {
     ),
 }
 
-# ── Claude system prompts ─────────────────────────────────────────────────────
-# Usados para post-procesar el texto crudo de Whisper vía Claude API.
-# Cada prompt convierte los comandos de voz en puntuación real y aplica
-# capitalización correcta según las reglas del idioma.
-CLAUDE_SYSTEM_PROMPTS = {
-    "de": """\
-Du bist ein Diktat-Nachbearbeitungsassistent. Du erhältst rohes Whisper-Transkript \
-auf Deutsch, in dem der Sprecher Satzzeichen durch gesprochene Befehle angibt. \
-Deine einzige Aufgabe ist die Umwandlung in korrekt formatierten Text.
+# ── Claude system prompt (unificado, autodetecta idioma) ─────────────────────
+CLAUDE_SYSTEM_PROMPT = """\
+You are a strict text post-processor for voice dictation.
 
-BEFEHLSZUORDNUNG:
-• Komma → ,
-• Punkt → .
-• Ausrufezeichen → !
-• Fragezeichen → ?
-• Doppelpunkt → :
-• Semikolon / Strichpunkt → ;
-• Bindestrich → -
-• Absatz / Neuer Absatz → [zwei Zeilenumbrüche, d. h. neuer Absatz]
-• Neue Zeile / Zeilenumbruch → [ein Zeilenumbruch]
+Your task:
+Convert raw speech-to-text input into clean, correctly formatted written text.
 
-FORMATIERUNGSREGELN:
-1. Nach Punkt, Ausrufezeichen oder Fragezeichen: erstes Wort des nächsten Satzes \
-großschreiben (sofern nicht bereits groß).
-2. Nach Komma: Satz läuft weiter, kein Großbuchstabe.
-3. Nach Absatz: erstes Wort des neuen Absatzes großschreiben.
-4. Kein Leerzeichen vor Satzzeichen einfügen.
-5. Mehrfach aufeinanderfolgende gleiche Satzzeichen auf eines reduzieren.
-6. Mehrere Absatz-Befehle hintereinander: auf einen Absatzumbruch reduzieren.
-7. Originalwörter des Sprechers vollständig erhalten – nichts hinzufügen, \
-kürzen oder umformulieren.
-8. Nur den fertigen Text ausgeben – keinerlei Erklärungen oder Kommentare.\
-""",
+IMPORTANT RULES:
+- Output ONLY the final formatted text.
+- Do NOT explain anything.
+- Do NOT add comments.
+- Do NOT change the meaning of the text.
 
-    "es": """\
-Eres un asistente de posprocesamiento de dictado. Recibes transcripciones brutas \
-de Whisper en español donde el hablante indica la puntuación mediante comandos de voz. \
-Tu única tarea es convertirlas en texto correctamente formateado.
+--------------------------------
+LANGUAGE HANDLING:
+- Detect the language automatically (German, Spanish, or English).
+- Apply the correct punctuation and capitalization rules for that language.
 
-MAPA DE COMANDOS:
-• coma → ,
-• punto → .
-• signo de exclamación → !
-• signo de interrogación → ?
-• dos puntos → :
-• punto y coma → ;
-• guión → -
-• punto y aparte / párrafo nuevo → [dos saltos de línea, es decir, párrafo nuevo]
-• nueva línea / salto de línea → [un salto de línea]
+--------------------------------
+PUNCTUATION COMMANDS:
 
-REGLAS DE FORMATO:
-1. Tras punto, signo de exclamación o signo de interrogación: capitalizar la primera \
-letra de la siguiente oración (si no lo está ya).
-2. Tras coma: la oración continúa, no capitalizar.
-3. Tras punto y aparte: capitalizar la primera palabra del nuevo párrafo.
-4. Ningún espacio antes de los signos de puntuación.
-5. Signos duplicados consecutivos reducirlos a uno.
-6. Múltiples "punto y aparte" seguidos: reducir a un único salto de párrafo.
-7. Conservar íntegramente las palabras del hablante – no añadir, acortar \
-ni reformular el contenido.
-8. Devolver únicamente el texto formateado – sin explicaciones ni comentarios.\
-""",
+GERMAN:
+- "punkt" → .
+- "komma" → ,
+- "fragezeichen" → ?
+- "ausrufezeichen" → !
+- "doppelpunkt" → :
+- "semikolon" / "strichpunkt" → ;
+- "bindestrich" → -
+- "neue zeile" / "zeilenumbruch" → line break
+- "absatz" / "neuer absatz" → paragraph break
 
-    "en": """\
-You are a dictation post-processing assistant. You receive raw Whisper transcripts \
-in English where the speaker indicates punctuation through spoken commands. \
-Your only task is to convert them into correctly formatted text.
+SPANISH:
+- "punto" → .
+- "coma" → ,
+- "signo de interrogación" → ¿ … ?
+- "signo de exclamación" → ¡ … !
+- "dos puntos" → :
+- "punto y coma" → ;
+- "guion" / "guión" → -
+- "nueva línea" / "salto de línea" → line break
+- "punto y aparte" / "párrafo" / "párrafo nuevo" → paragraph break
 
-COMMAND MAP:
-• comma → ,
-• period / full stop → .
-• exclamation mark / exclamation point → !
-• question mark → ?
-• colon → :
-• semicolon → ;
-• hyphen / dash → -
-• new paragraph / paragraph break → [two line breaks, i.e. a new paragraph]
-• new line / line break → [one line break]
+ENGLISH:
+- "period" / "full stop" → .
+- "comma" → ,
+- "question mark" → ?
+- "exclamation mark" / "exclamation point" → !
+- "colon" → :
+- "semicolon" → ;
+- "hyphen" / "dash" → -
+- "new line" / "line break" → line break
+- "new paragraph" / "paragraph break" → paragraph break
 
-FORMATTING RULES:
-1. After period, exclamation mark, or question mark: capitalize the first letter \
-of the next sentence (if not already capitalized).
-2. After comma: sentence continues, do not capitalize.
-3. After new paragraph: capitalize the first word of the new paragraph.
-4. No space before punctuation marks.
-5. Consecutive duplicate punctuation marks reduce to one.
-6. Multiple "new paragraph" commands in a row: reduce to a single paragraph break.
-7. Preserve the speaker's words in full – do not add, shorten, or rephrase content.
-8. Output only the formatted text – no explanations or comments.\
-""",
-}
+--------------------------------
+CAPITALIZATION RULES:
+- Capitalize after ".", "!", "?"
+- Do NOT capitalize after comma
+- Capitalize the first word of a new paragraph
+- In German: preserve existing capitalization of nouns
+
+--------------------------------
+EDGE CASES:
+- Repeated commands (e.g. "punto punto") → single punctuation mark "."
+- Multiple paragraph commands in a row → single paragraph break
+- Remove duplicated spaces
+- No space before punctuation marks
+- Fix obvious speech-to-text errors when unambiguous
+
+--------------------------------
+EXAMPLES:
+
+Input:
+hola coma como estas signo de interrogacion
+
+Output:
+Hola, ¿cómo estás?
+
+Input:
+hallo komma wie geht es dir fragezeichen absatz ich hoffe gut punkt
+
+Output:
+Hallo, wie geht es dir?
+Ich hoffe gut.
+
+Input:
+hello comma how are you question mark new paragraph i hope you are well period
+
+Output:
+Hello, how are you?
+I hope you are well.
+
+--------------------------------
+
+Now process the following text:\
+"""
 
 
 class WisperBar(rumps.App):
@@ -261,28 +266,70 @@ class WisperBar(rumps.App):
     @staticmethod
     def _normalize_text(text):
         import re
-        # Aplanar cualquier \n que Whisper inserte por su cuenta, para que
-        # solo nuestros comandos explícitos creen párrafos nuevos.
+        # Aplanar saltos que Whisper inserta por su cuenta
         text = re.sub(r'[ \t\r\n]+', ' ', text).strip()
-        text = re.sub(r'\bpunto y aparte\b', '\n\n', text, flags=re.IGNORECASE)
-        text = re.sub(r'\b[Aa]bsatz\b',      '\n\n', text)
-        text = re.sub(r'\b[Kk]omma\b',       ',',    text)
-        text = re.sub(r'\bcoma\b',            ',',    text, flags=re.IGNORECASE)
-        text = re.sub(r'\b[Pp]unto\b',        '.',    text)
-        text = re.sub(r'\b[Pp]unkt\b',        '.',    text)
-        text = re.sub(r',\s*,+',        ',', text)
-        text = re.sub(r'\.(\s*\.)+',    '.', text)
-        # Capitalizar la primera letra de cada párrafo nuevo
+
+        # ── Phrasen zuerst (längere Muster vor kürzeren) ──────────────────────
+        # Español
+        text = re.sub(r'\bpunto y aparte\b',          '\n\n', text, flags=re.I)
+        text = re.sub(r'\bpunto y coma\b',            ';',    text, flags=re.I)
+        text = re.sub(r'\bsigno de exclamaci[oó]n\b', '!',    text, flags=re.I)
+        text = re.sub(r'\bsigno de interrogaci[oó]n\b','?',   text, flags=re.I)
+        text = re.sub(r'\bdos puntos\b',              ':',    text, flags=re.I)
+        text = re.sub(r'\bnueva l[ií]nea\b',          '\n',   text, flags=re.I)
+        text = re.sub(r'\bgu[ií][oó]n\b',             '-',    text, flags=re.I)
+        text = re.sub(r'\bcoma\b',                    ',',    text, flags=re.I)
+        text = re.sub(r'\bpunto\b',                   '.',    text, flags=re.I)
+        # Deutsch
+        text = re.sub(r'\b[Aa]bsatz\b',               '\n\n', text)
+        text = re.sub(r'\b[Nn]eue [Zz]eile\b',        '\n',   text)
+        text = re.sub(r'\b[Zz]eilenumbruch\b',         '\n',   text)
+        text = re.sub(r'\b[Kk]omma\b',                ',',    text)
+        text = re.sub(r'\b[Pp]unkt\b',                '.',    text)
+        text = re.sub(r'\b[Aa]usrufezeichen\b',        '!',    text)
+        text = re.sub(r'\b[Ff]ragezeichen\b',          '?',    text)
+        text = re.sub(r'\b[Dd]oppelpunkt\b',           ':',    text)
+        text = re.sub(r'\b[Ss]emikolon\b',             ';',    text)
+        text = re.sub(r'\b[Ss]trichpunkt\b',           ';',    text)
+        text = re.sub(r'\b[Bb]indestrich\b',           '-',    text)
+        # English
+        text = re.sub(r'\bnew paragraph\b',            '\n\n', text, flags=re.I)
+        text = re.sub(r'\bparagraph break\b',          '\n\n', text, flags=re.I)
+        text = re.sub(r'\bnew line\b',                 '\n',   text, flags=re.I)
+        text = re.sub(r'\bline break\b',               '\n',   text, flags=re.I)
+        text = re.sub(r'\bexclamation (mark|point)\b', '!',    text, flags=re.I)
+        text = re.sub(r'\bquestion mark\b',            '?',    text, flags=re.I)
+        text = re.sub(r'\b(full stop|period)\b',       '.',    text, flags=re.I)
+        text = re.sub(r'\bsemicolon\b',                ';',    text, flags=re.I)
+        text = re.sub(r'\bcolon\b',                    ':',    text, flags=re.I)
+        text = re.sub(r'\b(hyphen|dash)\b',            '-',    text, flags=re.I)
+        text = re.sub(r'\bcomma\b',                    ',',    text, flags=re.I)
+
+        # Limpiar espacios antes de signos y duplicados
+        for p in ['.', ',', '!', '?', ':', ';']:
+            text = text.replace(f' {p}', p)
+        text = re.sub(r',+',      ',', text)
+        text = re.sub(r'\.+',     '.', text)
+        text = re.sub(r'!+',      '!', text)
+        text = re.sub(r'\?+',     '?', text)
+        text = re.sub(r':+',      ':', text)
+        text = re.sub(r';+',      ';', text)
+
+        # Capitalizar tras . ! ? y al inicio de cada párrafo
         parts = text.split('\n\n')
-        text = '\n\n'.join(
-            (p[0].upper() + p[1:] if p and p[0].islower() else p)
-            for p in parts
-        )
-        return text
+        result = []
+        for i, part in enumerate(parts):
+            if i > 0 and part and part[0].islower():
+                part = part[0].upper() + part[1:]
+            # Capitalizar tras . ! ?
+            part = re.sub(r'([.!?])\s+([a-záéíóúäöüà-z])',
+                          lambda m: m.group(1) + ' ' + m.group(2).upper(), part)
+            result.append(part)
+        return '\n\n'.join(result)
 
     def _post_process_with_claude(self, raw_text: str) -> str:
         """Post-procesa el texto crudo de Whisper con Claude API.
-        Devuelve el texto formateado, o raw_text si la API falla."""
+        Devuelve el texto formateado, o el resultado regex si la API falla."""
         if not _ANTHROPIC_AVAILABLE:
             return self._normalize_text(raw_text)
         try:
@@ -290,10 +337,7 @@ class WisperBar(rumps.App):
             msg = client.messages.create(
                 model="claude-sonnet-4-6",
                 max_tokens=2048,
-                system=CLAUDE_SYSTEM_PROMPTS.get(
-                    self.lang_code,
-                    CLAUDE_SYSTEM_PROMPTS["en"],
-                ),
+                system=CLAUDE_SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": raw_text}],
             )
             return msg.content[0].text.strip()
